@@ -1,4 +1,4 @@
-# Pertemuan 5 — Penjadwalan CPU, slide demi slide
+# Bab 5 — Penjadwalan CPU, slide demi slide
 Gambar mengikuti halaman 1–44 dari `K5 & K6.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
 
 **Fokus UTS:** FCFS, SJF, RR, Gantt chart, waktu tunggu rata-rata, dan efek quantum.

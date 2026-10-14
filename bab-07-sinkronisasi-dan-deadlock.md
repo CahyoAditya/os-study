@@ -1,4 +1,4 @@
-# Pertemuan 7 — Sinkronisasi dan deadlock, slide demi slide
+# Bab 7 — Sinkronisasi dan deadlock, slide demi slide
 Gambar mengikuti halaman 1–149 dari `K7.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
 
 **Fokus UTS:** Race condition, critical section, semaphore, bounded buffer, dining philosophers, deadlock, RAG, dan Banker.

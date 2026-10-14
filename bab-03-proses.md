@@ -1,4 +1,4 @@
-# Pertemuan 3 — Proses, slide demi slide
+# Bab 3 — Proses, slide demi slide
 Gambar mengikuti halaman 1–74 dari `K3.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
 
 **Fokus UTS:** Proses vs program, bagian memori, PCB, state, context switch, fork/exec/wait, zombie/orphan, dan IPC.

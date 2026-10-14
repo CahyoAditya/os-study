@@ -1,4 +1,4 @@
-# Pertemuan 6 — Penjadwalan real-time, slide demi slide
+# Bab 6 — Penjadwalan real-time, slide demi slide
 Gambar mengikuti halaman 45–79 dari `K5 & K6.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
 
 **Fokus UTS:** Rate-monotonic, earliest-deadline-first, utilisasi, timeline, dan deadline miss.

@@ -1,4 +1,4 @@
-# Pertemuan 4 — Thread dan konkurensi, slide demi slide
+# Bab 4 — Thread dan konkurensi, slide demi slide
 Gambar mengikuti halaman 1–63 dari `K4.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
 
 **Fokus UTS:** Manfaat dan model thread, thread pool, data/task parallelism, konkurensi, Pthreads, overhead, dan hukum Amdahl.

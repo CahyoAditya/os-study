@@ -1,4 +1,4 @@
-# Pertemuan 2 — Layanan dan struktur sistem operasi, slide demi slide
+# Bab 2 — Layanan dan struktur sistem operasi, slide demi slide
 Gambar mengikuti halaman 1–59 dari `K2.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
 
 **Fokus UTS:** Layanan SO, kategori system call, perpindahan mode, parameter, API, loader, pustaka dinamis, struktur kernel, policy dan mechanism.
