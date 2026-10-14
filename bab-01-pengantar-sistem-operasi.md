@@ -1,444 +1,367 @@
-# Bab 1 — Pengantar Sistem Operasi, slide demi slide
+# Bab 1 — Pengantar Sistem Operasi
 
-Materi ini mengikuti **60 halaman K1.pdf** dalam paket Sensei. Nomor di bawah adalah urutan halaman PDF; angka kecil pada kaki slide kadang berbeda. Gambar sengaja ditempatkan tepat sebelum pembahasannya agar bisa dibaca berurutan. Istilah bahasa Inggris dipertahankan saat lazim muncul dalam soal.
+Materi ini mengikuti **subbab 1.1–1.11** dalam *Operating System Concepts*, edisi ke-10, dan disesuaikan dengan slide **K1.pdf** serta kisi-kisi UTS dalam paket Sensei. Gambar dipilih ketika membantu menerangkan mekanisme. Urutannya mengikuti buku, bukan urutan 60 halaman slide.
 
-**Arah belajar UTS.** Kisi-kisi dalam paket menekankan definisi dan tujuan sistem operasi (SO), SO sebagai *resource allocator*, dual-mode, *privileged instruction*, timer, multiprogramming vs multitasking, boot loader, dan hypervisor. Seluruh slide tetap dibahas agar hubungan antarkonsep tidak terputus. Paket memuat kisi-kisi dan buku rujukan, tetapi tidak memuat dokumen yang bernama kontrak kuliah secara terpisah.
+**Fokus UTS pertemuan 1:** definisi dan tujuan sistem operasi (SO), *resource allocator*, dual-mode, *privileged instruction*, timer, multiprogramming vs multitasking, *boot loader*, dan hypervisor. Topik lain di bawah ini memberi landasan agar konsep tersebut mudah dihubungkan. Bab 1 terutama berisi mekanisme dan perbandingan; rumus numeriknya sedikit.
 
-## Peta cepat
+## 1.1 What Operating Systems Do — Apa yang dikerjakan SO?
+
+Bayangkan penyunting dokumen, pemutar musik, dan peramban berjalan bersama. Ketiganya membutuhkan CPU, memori, penyimpanan, serta perangkat I/O. Jika tiap aplikasi mengendalikan semuanya sendiri, satu aplikasi dapat mengambil seluruh RAM atau merusak data aplikasi lain. SO membuat aturan dan layanan agar sumber daya yang sama dapat dipakai dengan tertib.
+
+![Empat komponen sistem komputer; K1.pdf halaman 5](gambar/bab-01/slide-05.jpg)
+
+Diagram dibaca dari bawah: **perangkat keras → SO → aplikasi → pengguna**. Perangkat keras menyediakan sumber daya; aplikasi menentukan pekerjaan; SO mengatur akses ke perangkat. Saat Sensei menekan **Simpan**, aplikasi meminta layanan menulis berkas. SO memilih lokasi penyimpanan dan memakai driver untuk memerintah perangkat. Aplikasi tidak perlu memahami perintah fisik setiap model SSD.
+
+### 1.1.1 User View — Sudut pandang pengguna
+
+Pengguna laptop menginginkan kemudahan dan respons yang cepat. Server bersama harus membagi sumber daya di antara banyak pengguna. Ponsel perlu memperhatikan baterai. Perangkat tertanam mungkin tidak mempunyai layar atau pengguna yang berinteraksi langsung. Karena itu, tujuan praktis SO bergantung pada lingkungan. Menyebut SO hanya sebagai “tampilan grafis” melewatkan pekerjaan terpentingnya.
+
+### 1.1.2 System View — Sudut pandang sistem
+
+Ada dua peran utama SO. Sebagai **resource allocator**, SO memutuskan siapa memakai CPU, memori, dan I/O, kapan, dan berapa banyak. Saat proses A menunggu disk, CPU dapat diberikan kepada B. Sebagai **control program**, SO mengawasi eksekusi dan akses perangkat agar satu program tidak mengganggu program lain. Misalnya, aplikasi biasa tidak boleh menulis ke memori kernel. Pengalokasian menjawab perebutan sumber daya; pengendalian menjaga pemakaiannya sah dan tertib.
+
+### 1.1.3 Defining Operating Systems — Apa saja yang disebut SO?
+
+**Kernel** ialah inti yang mempunyai hak mengendalikan perangkat keras. **Program sistem** seperti shell membantu pemakaian komputer tetapi bukan bagian kernel. **Aplikasi** seperti peramban mengerjakan kebutuhan pengguna. Beberapa paket juga menyertakan *middleware*, yaitu layanan perantara untuk aplikasi. Tidak ada daftar komponen yang sama persis pada semua produk SO; “kernel” dan “seluruh program bawaan” bukan hal yang identik.
+
+**Cek UTS:** bila diminta empat komponen dan dua fungsi SO, gambar susunan di atas lalu jelaskan *alokasi sumber daya* dan *pengendalian program* dengan satu contoh. Jawaban “SO penghubung pengguna dengan perangkat keras” saja belum menerangkan kedua fungsi.
+
+## 1.2 Computer-System Organization — Bagaimana bagian komputer bekerja sama?
+
+CPU menjalankan instruksi; memori utama menampung instruksi dan data aktif; **device controller** mengendalikan jenis perangkat tertentu, seperti disk atau USB. Komponen tersebut terhubung melalui jalur komunikasi sistem. **Device driver** ialah perangkat lunak SO yang memahami controller tertentu dan memberi antarmuka lebih seragam kepada bagian SO lain. CPU dan controller dapat bekerja dalam waktu yang bertumpang tindih, walau akses ke memori bersama perlu diatur.
+
+![CPU, controller, dan memori; K1.pdf halaman 9](gambar/bab-01/slide-09.jpg)
+
+### 1.2.1 Interrupts — Bagaimana CPU mengetahui bahwa I/O selesai?
+
+#### 1.2.1.1 Overview — Gambaran alur
+
+Saat aplikasi meminta data, driver mengatur controller. Controller menjalankan operasi dan memakai buffer lokal sebagai penampung sementara. Setelah selesai, controller mengirim **interrupt** ke CPU. CPU menyimpan keadaan yang diperlukan, menjalankan penangan sesuai jenis interrupt, lalu dapat melanjutkan pekerjaan sebelumnya. CPU tidak perlu terus-menerus bertanya kepada perangkat apakah tugasnya selesai.
+
+![Garis waktu CPU dan perangkat I/O; K1.pdf halaman 12](gambar/bab-01/slide-12.jpg)
 
 ```text
-Pengguna → aplikasi → sistem operasi → CPU / memori / perangkat I/O
-                         ├─ membagi sumber daya
-                         ├─ mengendalikan akses
-                         └─ menyediakan layanan
+Aplikasi meminta baca → driver mengatur controller → perangkat bekerja
+          CPU dapat mengerjakan hal lain             ↓
+                CPU ← interrupt saat operasi selesai
+                         ↓
+                penangan kernel memeriksa hasil/status
+                         ↓
+                aplikasi menerima data atau galat
 ```
 
-### Slide 01 — Sampul bab
+**Interrupt vector** mengarahkan CPU ke penangan (*interrupt service routine*) yang sesuai. **Polling** berarti memeriksa sumber/status satu per satu; pemakaian istilahnya dapat berarti pemeriksaan sumber interrupt atau pemeriksaan perangkat berulang kali. **Exception/trap** muncul dari eksekusi instruksi, misalnya pembagian dengan nol. **System call** adalah permintaan layanan yang sengaja dibuat aplikasi. Ketiganya dapat membawa eksekusi ke kode SO, tetapi pemicunya berbeda: perangkat/timer berada di luar alur instruksi aplikasi, sedangkan exception dan system call terkait instruksi yang sedang dijalankan.
 
-![Slide 01: Chapter 1 Introduction](gambar/bab-01/slide-01.jpg)
+#### 1.2.1.2 Implementation — Bagaimana interrupt ditangani?
 
-Ini adalah pengantar. Pertanyaan utama bab ini: apa yang dikerjakan SO, bagaimana komputer menjalankan I/O, dan mengapa aplikasi tidak boleh bebas mengendalikan seluruh perangkat keras?
+Secara sederhana, setelah satu instruksi selesai CPU memeriksa apakah ada permintaan interrupt. Jika ada, nomor interrupt dipakai untuk mencari alamat penangan pada *interrupt vector*. Penangan menyimpan register yang akan diubah, membaca penyebab kejadian, menangani perangkat atau galat, memulihkan keadaan, lalu kembali ke instruksi program yang tertunda. CPU dapat menerima beberapa jenis interrupt dengan tingkat prioritas berbeda. Sebagian interrupt bisa ditunda selama bagian kerja yang sangat peka, sedangkan kejadian kritis tertentu tidak boleh ditunda. Detail jalur listrik dan nomor interrupt bergantung pada arsitektur; yang penting untuk belajar adalah urutan **sinyal → cari penangan → simpan keadaan → tangani → pulihkan → lanjut**.
 
-### Slide 02 — Peta topik
+### 1.2.2 Storage Structure — Di mana data disimpan?
 
-![Slide 02: daftar topik](gambar/bab-01/slide-02.jpg)
+Register dan cache dekat dengan CPU. **RAM** menampung program aktif dan biasanya kehilangan isi ketika listrik mati. **Penyimpanan sekunder**, seperti SSD dan HDD, mempertahankan data serta menampung lebih banyak, tetapi umumnya lebih lambat diakses. Saat aplikasi dibuka, instruksinya dipindahkan dari penyimpanan ke RAM sebelum dieksekusi.
 
-Urutan bab bergerak dari fungsi SO, susunan komputer, operasi SO, pengelolaan sumber daya, perlindungan, sampai virtualisasi dan lingkungan komputasi. Untuk UTS, hubungkan setiap istilah dengan masalah yang diselesaikannya; misalnya *timer* menyelesaikan masalah program yang memonopoli CPU.
+![Hierarki penyimpanan; K1.pdf halaman 19](gambar/bab-01/slide-19.jpg)
 
-### Slide 03 — Tujuan belajar
+Semakin dekat ke CPU, media umumnya lebih cepat tetapi lebih kecil. **Cache** menyimpan salinan data agar akses ulang cepat; data asal tidak otomatis hilang. Bila beberapa salinan ada dan salah satunya berubah, sistem harus menjaga konsistensinya. Ini penting ketika beberapa inti CPU berbagi data.
 
-![Slide 03: objectives](gambar/bab-01/slide-03.jpg)
+**Satuan yang perlu diingat:** `1 byte = 8 bit`. *Word* adalah ukuran alami sebuah arsitektur, bukan selalu 8 byte. `kB = 10³ byte` dan `KiB = 2¹⁰ byte`; baca konvensi soal sebelum menghitung kapasitas.
 
-Setelah bab ini, Sensei seharusnya bisa menceritakan alur interupsi, membedakan multiprosesor dengan satu prosesor, menjelaskan perpindahan user mode ke kernel mode, serta memberi contoh lingkungan komputasi dan SO terbuka. Gunakan tujuan ini sebagai daftar cek, bukan bahan hafalan kata demi kata.
+### 1.2.3 I/O Structure — Siapa memindahkan data?
 
-### Slide 04 — Empat komponen sistem komputer
+Controller menukar data dengan perangkat lewat buffer lokal. Pada transfer blok besar, **DMA (direct memory access)** memungkinkan controller memindahkan blok ke/dari RAM setelah CPU menyiapkan operasinya. CPU tidak perlu menyalin tiap byte dengan instruksinya sendiri, tetapi CPU tetap memulai operasi dan menangani hasil ketika interrupt datang. DMA tidak berarti CPU sama sekali tidak terlibat.
 
-![Slide 04: computer system structure](gambar/bab-01/slide-04.jpg)
+![Alur DMA; K1.pdf halaman 21](gambar/bab-01/slide-21.jpg)
 
-Empat komponennya adalah **pengguna, aplikasi, SO, dan perangkat keras**. Misalnya Sensei menekan tombol simpan: aplikasi pengolah kata meminta SO menulis berkas; SO memakai driver dan penyimpanan. CPU, memori, dan perangkat I/O adalah sumber daya fisik. Aplikasi menentukan pekerjaan yang diinginkan; SO mengatur cara sumber daya dipakai bersama.
+Pada **I/O sinkron**, pemanggil menunggu hasil sebelum melanjutkan alurnya. Pada **I/O asinkron**, pemanggil dapat melanjutkan pekerjaan dan menerima atau memeriksa hasil kemudian. Asinkron tidak berarti tanpa interrupt; interrupt justru salah satu cara memberi tahu penyelesaian.
 
-### Slide 05 — Gambar empat lapisan
+## 1.3 Computer-System Architecture — Satu CPU, banyak CPU, atau banyak komputer?
 
-![Slide 05: abstract view of components](gambar/bab-01/slide-05.jpg)
+### 1.3.1 Single-Processor Systems
 
-Baca diagram dari atas ke bawah: pengguna berinteraksi dengan aplikasi, aplikasi meminta layanan SO, lalu SO mengendalikan perangkat keras. Panah dua arah berarti hasil dan informasi galat kembali ke atas. **Catatan UTS:** bila diminta menggambar empat komponen, susun urutannya seperti gambar ini dan jelaskan dua fungsi SO: memudahkan penggunaan komputer dan mengalokasikan/mengendalikan sumber daya.
+Satu CPU serbaguna dengan satu inti hanya mengeksekusi satu alur instruksi pada satu saat. Pergantian cepat dapat membuat beberapa program tampak berjalan bersama. Controller keyboard atau disk mungkin mempunyai pemroses khusus, tetapi itu tidak menjadikan sistem multiprosesor serbaguna.
 
-### Slide 06 — Apa yang dilakukan SO?
+### 1.3.2 Multiprocessor Systems
 
-![Slide 06: what operating systems do](gambar/bab-01/slide-06.jpg)
+Sistem multiprosesor memiliki lebih dari satu unit pemrosesan yang mampu bekerja **paralel**. Pada **symmetric multiprocessing (SMP)**, CPU setara dapat mengerjakan proses pengguna dan tugas kernel; rancangan asimetris membagi peran khusus. Satu chip bisa berisi beberapa *core*. Banyak core pada satu chip berbeda dari banyak chip fisik, tetapi keduanya menambah kemampuan eksekusi paralel.
 
-Jawabannya bergantung pada sudut pandang. Pengguna laptop mengejar kemudahan dan respons cepat; server bersama perlu membagi CPU dan memori secara adil; ponsel juga memperhatikan baterai; perangkat tertanam dapat bekerja tanpa antarmuka pengguna. Jadi *resource allocator* berarti SO memilih siapa memakai sumber daya dan kapan. *Control program* berarti SO mengawasi program agar operasi I/O dan penggunaan perangkat tidak saling merusak.
+![SMP berbagi memori; K1.pdf halaman 23](gambar/bab-01/slide-23.jpg)
 
-### Slide 07 — Mengapa definisi SO beragam?
+**Konkurensi** berarti beberapa pekerjaan maju dalam periode yang sama; **paralelisme** berarti dua atau lebih pekerjaan benar-benar dieksekusi pada saat yang sama. Satu inti bisa mendukung konkurensi lewat pergantian tugas; banyak inti dapat mendukung paralelisme. Menambah CPU juga tidak menjamin kinerja naik sesuai jumlahnya, sebab pekerjaan perlu koordinasi dan berbagi memori. Pada **NUMA**, sebagian memori lebih dekat ke kelompok CPU tertentu sehingga lokasi data ikut memengaruhi waktu akses.
 
-![Slide 07: defining operating systems](gambar/bab-01/slide-07.jpg)
+### 1.3.3 Clustered Systems
 
-SO dipakai dari komputer umum sampai alat industri, sehingga paket perangkat lunaknya berbeda. Ketika satu komputer mulai dipakai untuk banyak pekerjaan, diperlukan pengatur program dan sumber daya. Jangan menyamakan "SO" dengan satu tampilan desktop saja.
+**Cluster** adalah beberapa **komputer terpisah** yang bekerja sama melalui koneksi. Ini berbeda dari SMP yang menggabungkan CPU dalam satu sistem. Cluster dapat menjaga layanan tetap tersedia ketika satu simpul gagal atau membagi pekerjaan yang dapat dipecah. Bila memakai penyimpanan bersama, akses antarsimpul perlu dikoordinasikan.
 
-### Slide 08 — Kernel, program sistem, aplikasi, middleware
+![Dua komputer dan penyimpanan bersama pada cluster; K1.pdf halaman 27](gambar/bab-01/slide-27.jpg)
 
-![Slide 08: operating system definition](gambar/bab-01/slide-08.jpg)
+## 1.4 Operating-System Operations — Dari boot sampai kernel mengambil kendali
 
-**Kernel** adalah bagian inti yang tetap berjalan dan memiliki hak mengendalikan perangkat keras. *System program* membantu operasi sistem tetapi berada di luar kernel, misalnya shell. Aplikasi mengerjakan kebutuhan pengguna, misalnya editor teks. *Middleware* adalah layanan/perangkat lunak perantara yang memudahkan pembuatan aplikasi. Batas paket SO bisa berbeda antarprodusen; pembedaan yang paling aman untuk soal adalah kernel ≠ seluruh aplikasi bawaan.
-
-### Slide 09 — CPU, controller, bus, memori
-
-![Slide 09: computer system organization](gambar/bab-01/slide-09.jpg)
-
-Satu atau lebih CPU dan *device controller* terhubung ke memori bersama melalui jalur komunikasi (*bus*). Controller menangani jenis perangkat tertentu. CPU dan perangkat bisa bekerja dalam waktu yang bertumpang tindih, tetapi akses ke memori tetap harus diatur. Bayangkan CPU menghitung sementara controller disk memindahkan data.
-
-### Slide 10 — Operasi I/O langkah demi langkah
-
-![Slide 10: computer-system operation](gambar/bab-01/slide-10.jpg)
-
-Saat aplikasi membaca data, driver SO memberi perintah kepada controller. Perangkat memindahkan data ke buffer lokal controller; kemudian data dipindahkan antara buffer dan memori utama. Setelah tugas selesai, controller memberi sinyal **interrupt** kepada CPU. *Driver* adalah perangkat lunak SO yang tahu cara berbicara dengan controller tertentu; *buffer* ialah penampung sementara.
-
-### Slide 11 — Interrupt, trap, dan vector
-
-![Slide 11: common functions of interrupts](gambar/bab-01/slide-11.jpg)
-
-**Interrupt** menghentikan sementara alur biasa CPU agar penangan khusus (*interrupt service routine/ISR*) dijalankan. *Interrupt vector* memetakan jenis interupsi ke alamat penangan. CPU harus menyimpan lokasi instruksi yang akan dilanjutkan. *Trap/exception* muncul dari pelaksanaan instruksi, misalnya pembagian dengan nol atau permintaan layanan melalui system call. Bedakan sumber perangkat keras dari peristiwa yang dipicu perangkat lunak.
-
-### Slide 12 — Garis waktu interupsi
-
-![Slide 12: interrupt timeline](gambar/bab-01/slide-12.jpg)
-
-Pada garis atas CPU menjalankan program pengguna, lalu sebentar menangani interupsi. Pada garis bawah perangkat I/O memindahkan data sendiri. Urutannya: permintaan I/O → perangkat bekerja → transfer selesai → sinyal interupsi → CPU menjalankan penangan → program dilanjutkan. Gambar ini menunjukkan mengapa CPU tidak harus terus-menerus menunggu satu perangkat.
-
-### Slide 13 — Apa yang dilakukan saat interupsi?
-
-![Slide 13: interrupt handling](gambar/bab-01/slide-13.jpg)
-
-SO menyimpan keadaan CPU, termasuk register dan *program counter* (alamat instruksi berikutnya), lalu menentukan jenis interupsi. **Polling** memeriksa sumber satu demi satu; sistem *vectored* memakai pemetaan langsung ke penangan yang sesuai. Setelah penangan selesai, keadaan dipulihkan agar pekerjaan sebelumnya dapat lanjut.
-
-### Slide 14 — Siklus I/O berbasis interupsi
-
-![Slide 14: interrupt-driven I/O cycle](gambar/bab-01/slide-14.jpg)
-
-Ikuti nomor panah: driver memulai I/O; controller menjalankannya; perangkat selesai atau mengalami galat; controller mengirim interupsi; CPU beralih ke penangan; penangan membaca hasil; CPU melanjutkan pekerjaan. Jika ada galat, penangan juga menentukan cara melaporkannya. Intinya, interupsi adalah pemberitahuan selesai, bukan proses pemindahan seluruh data itu sendiri.
-
-### Slide 15 — I/O menunggu vs tidak menunggu
-
-![Slide 15: I/O structure](gambar/bab-01/slide-15.jpg)
-
-Pada I/O **sinkron**, alur pemanggil menunggu operasi selesai. Pada I/O **asinkron**, pemanggil dapat lanjut dan memeriksa/menunggu hasil kemudian. SO menyimpan keadaan tiap perangkat dalam tabel status, sehingga beberapa permintaan dapat dikelola. *Wait instruction* membuat CPU berhenti sampai interupsi, sedangkan *busy waiting* berulang kali memeriksa status dan memakai waktu CPU.
-
-### Slide 16 — Jenis penyimpanan
-
-![Slide 16: storage structure](gambar/bab-01/slide-16.jpg)
-
-Memori utama cepat dan bisa diakses CPU secara langsung, tetapi umumnya volatil: isinya hilang saat listrik mati. Penyimpanan sekunder mempertahankan data. HDD memakai piringan, *track*, dan *sector*; perangkat NVM seperti SSD memakai teknologi berbeda dan juga tidak volatil. **Jebakan:** "lebih cepat" tidak selalu berarti "lebih permanen".
-
-### Slide 17 — Bit, byte, word, dan satuan kapasitas
-
-![Slide 17: storage definitions](gambar/bab-01/slide-17.jpg)
-
-**Bit** bernilai 0 atau 1; **byte = 8 bit**. *Word* adalah ukuran data alami arsitektur, misalnya 64 bit = 8 byte pada contoh tertentu; panjangnya tidak universal. Untuk kapasitas, periksa apakah soal memakai kelipatan desimal (kilo = 10³) atau biner (kibi = 2¹⁰). Jangan menganggap `b` (bit) sama dengan `B` (byte).
-
-### Slide 18 — Hierarki penyimpanan dan caching
-
-![Slide 18: storage hierarchy](gambar/bab-01/slide-18.jpg)
-
-Data yang sering diperlukan disalin dari media lambat ke media lebih cepat; itulah **caching**. Semakin dekat ke CPU, umumnya akses lebih cepat, kapasitas lebih kecil, dan biaya per bit lebih tinggi. Driver menyediakan antarmuka yang seragam sehingga kernel tidak perlu mengetahui rincian fisik setiap perangkat dari awal.
-
-### Slide 19 — Piramida penyimpanan
-
-![Slide 19: storage-device hierarchy](gambar/bab-01/slide-19.jpg)
-
-Baca dari puncak ke bawah: register, cache, memori utama, lalu penyimpanan lebih lambat. Data bergerak antarlapis saat dibutuhkan. Misalnya nilai dari disk dibawa ke RAM, lalu cache, lalu register sebelum CPU mengolahnya. Semakin besar suatu lapis, biasanya semakin lambat dibanding lapis di atasnya; ini kecenderungan umum, bukan rumus mutlak untuk semua perangkat.
-
-### Slide 20 — Arsitektur von Neumann
-
-![Slide 20: how a modern computer works](gambar/bab-01/slide-20.jpg)
-
-Instruksi dan data berada di memori; CPU mengambil instruksi, mendekode, lalu menjalankannya. Controller dan memori berkomunikasi melalui jalur sistem. SO ikut mengatur kapan program dan I/O boleh memakai sumber daya tersebut. Lihat posisi memori sebagai titik temu pekerjaan CPU dan perangkat I/O.
-
-### Slide 21 — Direct Memory Access (DMA)
-
-![Slide 21: DMA](gambar/bab-01/slide-21.jpg)
-
-Untuk transfer blok besar, CPU mengatur operasi terlebih dahulu, lalu controller **DMA** memindahkan data langsung antara perangkat/buffernya dan RAM. CPU tidak perlu menyalin setiap byte dengan instruksinya sendiri. Setelah satu blok selesai, controller mengirim interupsi; karena itu overhead interupsi bisa jauh lebih kecil daripada satu interupsi per byte.
-
-### Slide 22 — Multiprosesor
-
-![Slide 22: computer-system architecture](gambar/bab-01/slide-22.jpg)
-
-Multiprosesor memakai lebih dari satu prosesor untuk meningkatkan throughput, berbagi fasilitas, dan meningkatkan keandalan. Pada **asymmetric multiprocessing**, peran prosesor dibagi secara khusus. Pada **symmetric multiprocessing (SMP)**, prosesor dapat menjalankan jenis tugas yang sama. Jangan samakan jumlah proses (program berjalan) dengan jumlah prosesor fisik.
-
-### Slide 23 — Gambar SMP
-
-![Slide 23: symmetric multiprocessing](gambar/bab-01/slide-23.jpg)
-
-Beberapa prosesor mengakses memori dan perangkat I/O bersama. SO harus mengatur tugas dan menjaga data bersama agar perubahan dari satu prosesor tidak merusak pekerjaan prosesor lain. Jika dua CPU benar-benar mengeksekusi dua tugas pada saat yang sama, itu **paralelisme**; pada satu CPU yang bergantian cepat, itu **konkurensi**.
-
-### Slide 24 — Banyak inti dan banyak chip
-
-![Slide 24: dual-core design](gambar/bab-01/slide-24.jpg)
-
-Satu chip dapat mempunyai beberapa *core*. Dua core berarti ada dua unit eksekusi yang dapat bekerja paralel, walaupun tetap berbagi beberapa komponen chip. Banyak chip berbeda dari banyak core pada satu chip; keduanya dapat dipakai dalam satu sistem multiprosesor.
-
-### Slide 25 — NUMA
-
-![Slide 25: non-uniform memory access](gambar/bab-01/slide-25.jpg)
-
-Pada **NUMA**, tiap kelompok CPU punya memori yang lebih dekat. CPU tetap dapat mengakses memori kelompok lain, tetapi waktu aksesnya berbeda. Pada gambar, garis dekat CPU–memori lokal lebih menguntungkan daripada lintasan melewati interkoneksi. SO sebaiknya menempatkan tugas dan datanya berdekatan bila memungkinkan.
-
-### Slide 26 — Cluster
-
-![Slide 26: clustered systems](gambar/bab-01/slide-26.jpg)
-
-Cluster menghubungkan **beberapa komputer** yang bekerja sama, berbeda dari beberapa CPU dalam satu komputer. *Asymmetric cluster* punya mesin siaga; *symmetric cluster* dapat menjalankan pekerjaan pada banyak simpul. Kegunaannya antara lain menjaga layanan tetap tersedia saat satu mesin gagal atau membagi beban komputasi. Penyimpanan bersama perlu koordinasi agar dua simpul tidak mengubah data yang sama secara kacau.
-
-### Slide 27 — Gambar cluster
-
-![Slide 27: clustered systems diagram](gambar/bab-01/slide-27.jpg)
-
-Perhatikan kotak komputer yang terpisah dan penyimpanan bersama. Jika satu simpul gagal, simpul lain dapat melanjutkan layanan sesuai rancangan. Ini bukan berarti semua program otomatis menjadi lebih cepat; aplikasi komputasi paralel harus memang bisa dibagi.
-
-### Slide 28 — Papan utama PC
-
-![Slide 28: PC motherboard](gambar/bab-01/slide-28.jpg)
-
-Gambar fisik membantu mengaitkan abstraksi sebelumnya dengan komponen nyata: soket CPU, slot RAM, penghubung perangkat, dan controller. SO tidak berbicara dengan semua komponen menggunakan satu cara identik; driver menjembatani perbedaan perangkat.
-
-### Slide 29 — Boot dan operasi SO
-
-![Slide 29: operating-system operations](gambar/bab-01/slide-29.jpg)
-
-Saat komputer dinyalakan, firmware menjalankan kode awal; **bootstrap/boot loader** menyiapkan sistem dan memuat kernel. Setelah kernel aktif, layanan lain (*daemon*) dapat dimulai. Kerja SO lalu banyak dipicu peristiwa: interupsi perangkat, exception, dan system call. Urutan singkat untuk hafalan: **nyala → bootstrap/loader → kernel → layanan → aplikasi**.
-
-### Slide 30 — Multiprogramming vs multitasking
-
-![Slide 30: multiprogramming and multitasking](gambar/bab-01/slide-30.jpg)
-
-**Multiprogramming** menyimpan beberapa pekerjaan di memori agar CPU tidak menganggur saat satu pekerjaan menunggu I/O. **Multitasking/time-sharing** bergantian menjalankan pekerjaan cukup cepat sehingga pengguna dapat berinteraksi dengan tiap aplikasi. Misalnya unduhan menunggu jaringan sementara editor tetap merespons. Keduanya berbagi CPU, tetapi penekanan pertama adalah pemanfaatan CPU dan penekanan kedua adalah respons interaktif. *Swapping* memindahkan proses/isinya antara memori dan penyimpanan bila memori terbatas.
-
-### Slide 31 — Tata letak memori multiprogramming
-
-![Slide 31: memory layout](gambar/bab-01/slide-31.jpg)
-
-Gambar menunjukkan SO dan beberapa pekerjaan menempati memori pada saat bersamaan. Hanya yang sedang memperoleh CPU yang benar-benar mengeksekusi pada satu core; pekerjaan lain dapat menunggu giliran atau I/O. Pemisahan wilayah memori perlu perlindungan supaya satu program tidak bebas menimpa program lain.
-
-### Slide 32 — User mode dan kernel mode
-
-![Slide 32: dual-mode operation](gambar/bab-01/slide-32.jpg)
-
-Perangkat keras menyediakan penanda mode. **User mode** membatasi aplikasi; **kernel mode** mengizinkan operasi inti. Instruksi **privileged** hanya sah di kernel mode, misalnya mengatur timer atau I/O tertentu. Saat aplikasi meminta layanan lewat *system call*, CPU masuk kernel mode secara terkendali; setelah layanan selesai, kontrol kembali ke user mode. Inilah pagar utama perlindungan SO.
-
-### Slide 33 — Perpindahan mode dan timer
-
-![Slide 33: transition from user to kernel mode](gambar/bab-01/slide-33.jpg)
-
-Sebelum menyerahkan CPU kepada aplikasi, kernel mengatur **timer**. Ketika waktu habis, timer menimbulkan interupsi sehingga kernel memperoleh kendali kembali. Aplikasi tidak boleh bebas menonaktifkan timer, sebab program yang macet bisa menguasai CPU selamanya. *System call* juga masuk ke kernel, tetapi melalui permintaan layanan yang sengaja dilakukan aplikasi, bukan karena waktu habis.
+Ketika listrik dinyalakan, CPU belum menjalankan SO. Kode awal pada **firmware** melakukan *bootstrap*: menyiapkan perangkat penting, menemukan jalur pemuatan, dan memulai pemuatan kernel. **Boot loader** memuat kernel ke memori. Setelah kernel berjalan, layanan sistem dapat dimulai, lalu aplikasi pengguna dapat dijalankan. Implementasi firmware dan loader berbeda antarplatform, tetapi urutan konsepnya sama.
 
 ```text
-Aplikasi (user mode) ── system call / interrupt / exception ──► kernel mode
-Aplikasi (user mode) ◄──────────── kembali dari kernel ───────── kernel mode
+Daya menyala → firmware/bootstrap → boot loader → kernel di RAM
+                                                ↓
+                                  layanan sistem → aplikasi
 ```
 
-### Slide 34 — Proses
+Pertanyaan “siapa menjalankan SO sebelum SO ada?” dijawab oleh firmware dan loader, bukan aplikasi yang sudah berjalan. Boot loader berbeda dari kernel; tugasnya menyiapkan dan memuat kernel.
 
-![Slide 34: process management](gambar/bab-01/slide-34.jpg)
+### 1.4.1 Multiprogramming and Multitasking
 
-**Program** adalah kumpulan instruksi pasif di penyimpanan; **proses** adalah program yang sedang dijalankan beserta keadaan dan sumber dayanya. Satu proses memerlukan CPU, memori, berkas, dan I/O. Pada proses multithread, tiap thread punya penunjuk instruksi sendiri. Rincian state proses dibahas lagi pada Bab 3; di sini cukup pahami mengapa SO harus mengaturnya.
+Pada **multiprogramming**, beberapa pekerjaan berada di memori. Ketika A menunggu I/O, CPU dapat mengerjakan B, sehingga tidak menganggur. Pada **multitasking/time-sharing**, CPU berpindah cukup sering di antara pekerjaan agar pengguna bisa berinteraksi dengan semuanya secara responsif. Keduanya dapat diterapkan sekaligus; pembeda utamanya adalah tujuan yang ditonjolkan: pemanfaatan CPU versus respons interaktif.
 
-### Slide 35 — Tugas pengelolaan proses
+![Beberapa pekerjaan di memori; K1.pdf halaman 31](gambar/bab-01/slide-31.jpg)
 
-![Slide 35: process management activities](gambar/bab-01/slide-35.jpg)
+Contoh: peramban menunggu jaringan, lalu CPU menjalankan editor (**multiprogramming**). Ketika keduanya siap, SO memberi jatah CPU bergantian agar keduanya tetap responsif (**multitasking**). Pada satu inti, ini bukan bukti dua instruksi dieksekusi persis bersamaan.
 
-SO membuat, menghentikan, menunda, dan melanjutkan proses. SO juga menyediakan cara proses saling berkomunikasi, menyinkronkan akses data, dan menangani kebuntuan (*deadlock*). Misalnya dua aplikasi yang sama-sama menulis berkas perlu aturan agar hasilnya tidak rusak.
+### 1.4.2 Dual-Mode and Multimode Operation
 
-### Slide 36 — Tugas pengelolaan memori
+Perangkat keras menyediakan penanda mode. Aplikasi berjalan dalam **user mode** yang dibatasi; kernel menjalankan pekerjaan dengan hak **kernel mode**. **Privileged instruction** hanya boleh dijalankan pada mode istimewa, misalnya pengaturan timer atau operasi perangkat keras tertentu. Jika aplikasi bebas mengubah perlindungan memori, kesalahannya dapat merusak seluruh sistem.
 
-![Slide 36: memory management](gambar/bab-01/slide-36.jpg)
+![Perpindahan user mode dan kernel mode; K1.pdf halaman 33](gambar/bab-01/slide-33.jpg)
 
-Instruksi dan data yang dibutuhkan harus tersedia di memori saat dipakai. SO mencatat wilayah memori milik siapa, memilih data/proses yang masuk atau keluar, lalu mengalokasikan dan membebaskan ruang. Contoh sederhana: saat aplikasi ditutup, memori yang dipakainya harus tersedia lagi untuk aplikasi lain.
+```text
+USER MODE: aplikasi meminta layanan
+    │ system call
+    ▼
+KERNEL MODE: periksa izin/parameter → kerjakan layanan → siapkan hasil
+    │ kembali dari system call
+    ▼
+USER MODE: aplikasi melanjutkan instruksi
 
-### Slide 37 — Tugas pengelolaan berkas
+Interrupt atau exception juga dapat membawa CPU ke penangan kernel.
+```
 
-![Slide 37: file-system management](gambar/bab-01/slide-37.jpg)
+**Perpindahan mode tidak selalu berarti pergantian proses.** Proses yang meminta layanan dapat masuk kernel mode lalu kembali menjadi proses yang sama. Pergantian proses baru terjadi bila kernel memilih pekerjaan lain. Beberapa arsitektur mempunyai tingkat hak tambahan untuk virtualisasi.
 
-SO memberi tampilan logis berupa **berkas dan direktori**, walau penyimpanan fisiknya berbeda. Tugasnya meliputi membuat/menghapus berkas dan direktori, memetakan berkas ke penyimpanan, membuat cadangan, serta mengatur hak akses. **Jebakan UTS 2018:** mengalokasikan dan membebaskan RAM termasuk pengelolaan memori, bukan pengelolaan berkas.
+### 1.4.3 Timer
 
-### Slide 38 — Penyimpanan massal
+Sebelum menyerahkan CPU ke aplikasi, kernel memasang **timer**. Ketika waktunya habis, timer memicu interrupt agar kernel memperoleh kendali kembali. Kernel dapat melanjutkan aplikasi yang sama atau menjadwalkan yang lain. Aplikasi tidak boleh bebas mematikan timer. Jika boleh, program `while (true)` dapat memonopoli CPU. Timer menjamin peluang bagi kernel untuk mengambil kendali, bukan membuat semua program otomatis selesai.
 
-![Slide 38: mass-storage management](gambar/bab-01/slide-38.jpg)
+**Alur inti UTS:** `boot loader memuat kernel → beberapa pekerjaan berada di memori → timer dipasang → aplikasi berjalan dalam user mode → system call/interrupt/exception masuk ke kernel mode → kernel menangani kejadian dan mungkin memilih proses lain`.
 
-SO mengelola media penyimpanan besar: *mount/unmount*, ruang kosong, alokasi, penjadwalan disk, partisi, dan proteksi. **Mount** membuat sistem berkas di suatu perangkat dapat diakses pada lokasi tertentu; tidak sama dengan membuat direktori. Tape atau media optik dapat dipakai untuk arsip walau tidak secepat disk utama.
+## 1.5 Resource Management — Apa saja yang diatur SO?
 
-### Slide 39 — Cara cache bekerja
+Bagian ini adalah peta tugas. Kaitkan sumber daya dengan masalah yang muncul bila tidak dikelola; algoritme rinci dibahas pada bab-bab berikutnya.
 
-![Slide 39: caching](gambar/bab-01/slide-39.jpg)
+### 1.5.1 Process Management
 
-Saat data diminta, sistem memeriksa cache dulu. Jika ada (*hit*), data langsung dipakai. Jika tidak (*miss*), data diambil dari tempat lebih lambat dan biasanya disalin ke cache. Karena cache terbatas, perlu kebijakan memilih data yang diganti. Contoh: membuka berkas yang baru diakses sering lebih cepat karena sebagian data masih tersimpan di cache.
+**Program** adalah instruksi pasif di penyimpanan. **Proses** adalah program yang sedang berjalan beserta keadaan dan sumber dayanya. SO membuat dan menghentikan proses, menentukan giliran CPU, menunda dan melanjutkan pekerjaan, serta menyediakan komunikasi dan sinkronisasi. Dua proses yang mengubah data sama tanpa aturan dapat menghasilkan nilai salah.
 
-### Slide 40 — Tabel jenis penyimpanan
+Satu program dapat melahirkan beberapa proses. Misalnya dua jendela aplikasi yang sama dapat mempunyai data kerja dan keadaan eksekusi berbeda. Jadi ketika SO menjadwalkan CPU, yang ditangani adalah pekerjaan aktif beserta keadaannya, bukan sekadar nama berkas program. Rincian keadaan proses dan perpindahannya dibahas dalam Bab 3.
 
-![Slide 40: characteristics of storage](gambar/bab-01/slide-40.jpg)
+### 1.5.2 Memory Management
 
-Bandingkan kecepatan, kapasitas, dan apakah data bertahan tanpa listrik. Perpindahan data antarlapis bisa dikelola perangkat keras, SO, atau aplikasi. Untuk menjawab soal, jelaskan alasan sebuah data berada di RAM/cache/disk, bukan menghafal urutan saja.
+SO mencatat wilayah memori yang dipakai, memilih apa yang masuk atau keluar, serta mengalokasikan dan membebaskan ruang. Instruksi dan data aktif harus tersedia di memori saat digunakan. Perlindungan memori mencegah aplikasi A bebas mengubah data B. **Mengalokasikan dan membebaskan RAM termasuk pengelolaan memori**, bukan pengelolaan berkas.
 
-### Slide 41 — Perjalanan data A
+### 1.5.3 File-System Management
 
-![Slide 41: migration of data A](gambar/bab-01/slide-41.jpg)
+Sistem berkas memberi nama dan susunan logis bagi data: berkas dan direktori. SO membuat atau menghapusnya, mengatur akses, dan memetakan data logis ke penyimpanan. Pengguna bisa membuka `catatan.txt` tanpa tahu blok fisiknya berada di mana.
 
-Satu nilai dapat memiliki salinan di disk, RAM, cache, dan register. Jika satu salinan berubah, sistem harus memastikan pembaca berikutnya memakai nilai terbaru. Pada banyak CPU, masalah ini disebut **cache coherency**. Di jaringan, salinan tersebar di komputer berbeda sehingga koordinasinya lebih rumit lagi.
+### 1.5.4 Mass-Storage Management
 
-### Slide 42 — Subsistem I/O
+SO mengelola ruang kosong, alokasi blok, penjadwalan akses, dan pemasangan sistem berkas (*mount*). *Mount* membuat isi suatu sistem berkas dapat diakses pada tempat tertentu dalam susunan berkas. Itu berbeda dari menyalin seluruh isi disk ke RAM.
 
-![Slide 42: I/O subsystem](gambar/bab-01/slide-42.jpg)
+### 1.5.5 Cache Management
 
-SO menyembunyikan perbedaan perangkat lewat antarmuka umum dan driver khusus. **Buffering** menampung data selama transfer; **caching** menyimpan salinan agar akses berikutnya cepat; **spooling** mengantre pekerjaan, misalnya beberapa dokumen menunggu satu printer. Tiga istilah ini mirip karena sama-sama menyimpan sementara, tetapi tujuannya berbeda.
+Cache menyimpan salinan data untuk akses ulang yang lebih cepat. **Cache hit** berarti data ditemukan; **cache miss** berarti perlu diambil dari lapisan yang lebih lambat. Karena kapasitasnya terbatas, sistem perlu memilih salinan mana yang diganti. Saat data memiliki beberapa salinan, perubahan harus dijaga konsistensinya.
 
-### Slide 43 — Protection dan security
+![Satu data tersalin pada beberapa lapisan; K1.pdf halaman 41](gambar/bab-01/slide-41.jpg)
 
-![Slide 43: protection and security](gambar/bab-01/slide-43.jpg)
+### 1.5.6 I/O System Management
 
-**Protection** mengatur siapa boleh mengakses sumber daya apa. **Security** melindungi sistem dari ancaman, termasuk serangan dari luar dan penyalahgunaan dari dalam. SO mengenali pengguna lewat UID, dapat mengelompokkan mereka lewat GID, dan mengaitkan identitas itu ke proses serta berkas. Contoh: izin berkas mencegah pengguna biasa mengubah data milik pengguna lain.
+SO menyembunyikan rincian perangkat dengan driver dan antarmuka umum. **Buffering** menampung data selama transfer atau saat kecepatan dua pihak berbeda. **Caching** mempercepat akses ulang. **Spooling** mengantre pekerjaan yang memakai perangkat secara bergiliran, seperti printer. Ketiganya dapat menyimpan sementara, tetapi tujuannya berlainan.
 
-### Slide 44 — Virtualisasi, emulasi, interpretasi
-
-![Slide 44: virtualization](gambar/bab-01/slide-44.jpg)
-
-**Virtualisasi** memungkinkan beberapa lingkungan/OS tamu berbagi satu mesin fisik; **hypervisor/VMM** mengelola mesin virtual dan membagi sumber daya fisik. **Emulasi** meniru arsitektur mesin lain sehingga instruksi CPU yang berbeda bisa dijalankan, biasanya dengan biaya kinerja lebih besar. **Interpretasi** menjalankan instruksi melalui penerjemah perangkat lunak. Pada soal, cari apakah arsitektur CPU tamu dan host sama atau berbeda.
-
-### Slide 45 — Mengapa memakai mesin virtual?
-
-![Slide 45: virtualization use cases](gambar/bab-01/slide-45.jpg)
-
-Mesin virtual berguna untuk menguji aplikasi pada beberapa OS, mencoba konfigurasi tanpa menambah komputer fisik, dan menata pusat data. VMM dapat berjalan di atas SO host atau langsung pada perangkat keras. Jika langsung pada perangkat keras, VMM sendiri mengambil peran dasar host.
-
-### Slide 46 — Gambar virtualisasi
-
-![Slide 46: computing environment virtualization](gambar/bab-01/slide-46.jpg)
-
-Baca lapisannya: perangkat keras fisik di bawah, VMM/host mengelola pembagian, lalu OS tamu dan aplikasi di atasnya. Masing-masing tamu merasa punya komputer sendiri, padahal CPU, memori, dan I/O fisiknya dibagi. Itulah abstraksi utama hypervisor.
-
-### Slide 47 — Sistem terdistribusi
-
-![Slide 47: distributed systems](gambar/bab-01/slide-47.jpg)
-
-Sistem terdistribusi terdiri atas komputer terpisah yang terhubung jaringan dan bertukar pesan. LAN mencakup area lokal, WAN area luas, MAN skala kota, PAN jarak pribadi. *Network OS* menyediakan komunikasi dan layanan antarmesin; keterpisahan fisik tetap ada meskipun layanan berusaha tampak terpadu.
-
-### Slide 48 — Linked list di kernel
-
-![Slide 48: kernel data structures linked lists](gambar/bab-01/slide-48.jpg)
-
-Kernel perlu menyimpan kumpulan proses, perangkat, dan pekerjaan. **Singly linked list** punya penunjuk ke elemen berikut; **doubly linked list** juga ke sebelumnya; **circular list** menghubungkan akhir kembali ke awal. Pada soal konsep, kaitkan bentuk data dengan operasi: daftar ganda mudah dihapus dari tengah bila elemen sudah diketahui.
-
-### Slide 49 — Pohon pencarian
-
-![Slide 49: kernel data structures tree](gambar/bab-01/slide-49.jpg)
-
-Pada *binary search tree*, nilai kecil dan besar ditempatkan mengikuti aturan kiri/kanan yang konsisten. Pencarian pada pohon sangat timpang dapat menjadi **O(n)**; bila seimbang menjadi **O(log n)**. Ini menjelaskan mengapa kernel memakai struktur data yang menjaga operasi pencarian tetap efisien.
-
-### Slide 50 — Hash map dan bitmap
-
-![Slide 50: kernel data structures hash bitmap](gambar/bab-01/slide-50.jpg)
-
-*Hash map* memakai fungsi hash untuk menemukan tempat penyimpanan berdasarkan kunci; akses rata-rata dapat cepat, tetapi benturan kunci perlu ditangani. **Bitmap** memakai satu bit per item untuk menandai keadaan, misalnya blok kosong/terpakai. Untuk 8 item, `00100100` hanya memerlukan 8 bit keadaan.
-
-### Slide 51 — Komputasi tradisional
-
-![Slide 51: traditional computing](gambar/bab-01/slide-51.jpg)
-
-Komputer pribadi masih ada, tetapi kini hampir selalu terhubung ke jaringan dan layanan lain. *Thin client* mengandalkan server untuk sebagian pekerjaan. Firewall melindungi lalu lintas jaringan. Batas "komputer tunggal" dan "layanan jaringan" menjadi semakin kabur.
-
-### Slide 52 — Komputasi mobile
-
-![Slide 52: mobile computing](gambar/bab-01/slide-52.jpg)
-
-Ponsel dan tablet memiliki sensor, lokasi, layar sentuh, serta koneksi nirkabel yang membentuk jenis aplikasi baru. SO mobile harus mengatur sumber daya terbatas dan baterai. Android dan iOS adalah contoh dalam slide; jangan anggap semua perangkat mobile adalah sistem real-time hanya karena responsnya terasa cepat.
-
-### Slide 53 — Client-server
-
-![Slide 53: client-server computing](gambar/bab-01/slide-53.jpg)
-
-**Client** meminta layanan, **server** menjawab. Server komputasi dapat menjalankan kueri atau perhitungan; file server menyimpan dan mengambil berkas. Contoh: browser meminta halaman kepada web server. Posisi client/server adalah peran komunikasi, bukan ukuran mesin.
-
-### Slide 54 — Peer-to-peer
-
-![Slide 54: peer-to-peer computing](gambar/bab-01/slide-54.jpg)
-
-Pada **P2P**, simpul (*peer*) dapat meminta sekaligus menyediakan layanan. Peer perlu menemukan peer lain, misalnya lewat daftar pusat atau mekanisme pencarian. Perbandingan cepat: client-server punya peran layanan yang lebih tetap; P2P memungkinkan peran berganti pada setiap simpul.
-
-### Slide 55 — Cloud dan jenis layanannya
-
-![Slide 55: cloud computing](gambar/bab-01/slide-55.jpg)
-
-Cloud menyediakan komputasi, penyimpanan, atau aplikasi melalui jaringan. **IaaS** menyediakan infrastruktur virtual; **PaaS** menyediakan lingkungan menjalankan aplikasi; **SaaS** menyediakan aplikasi siap pakai. *Public cloud* ditawarkan ke pelanggan umum, *private cloud* dipakai organisasi sendiri, dan *hybrid* menggabungkan keduanya. Virtualisasi sering menjadi fondasinya, tetapi cloud juga membutuhkan pengelolaan layanan.
-
-### Slide 56 — Susunan cloud
-
-![Slide 56: cloud components](gambar/bab-01/slide-56.jpg)
-
-Cloud memadukan SO pada mesin fisik/tamu, VMM, alat pengelola, jaringan, serta pengaman seperti firewall. *Load balancer* menyebarkan permintaan ke beberapa aplikasi/mesin agar beban tidak menumpuk pada satu tempat. VM adalah salah satu bahan bangunan cloud, bukan seluruh cloud.
-
-### Slide 57 — Sistem tertanam real-time
-
-![Slide 57: real-time embedded systems](gambar/bab-01/slide-57.jpg)
-
-Perangkat tertanam mengerjakan tugas khusus; sebagian memakai SO kecil, sebagian tidak. Pada **real-time**, kebenaran hasil bergantung pada **batas waktu**: jawaban yang benar tetapi terlambat dapat dianggap gagal. Contoh intuitif adalah pengendali rem ABS yang harus bereaksi tepat waktu, bukan sekadar rata-rata cepat.
-
-### Slide 58 — SO bebas dan sumber terbuka
-
-![Slide 58: free and open-source OS](gambar/bab-01/slide-58.jpg)
-
-Perangkat lunak sumber terbuka menyediakan kode sumber untuk dipelajari dan diubah sesuai lisensi. Gerakan perangkat lunak bebas dan gerakan sumber terbuka punya penekanan nilai yang berbeda, meskipun banyak proyek terkait keduanya. GNU/Linux dan keluarga BSD adalah contoh pada slide. Untuk UTS, bedakan **kode sumber tersedia** dari sekadar program yang gratis dipakai.
-
-### Slide 59 — Mengapa SO dapat dipelajari langsung?
-
-![Slide 59: study of operating systems](gambar/bab-01/slide-59.jpg)
-
-Kode sumber SO terbuka memungkinkan kita melihat bagaimana pengelolaan memori, proses, dan perangkat benar-benar diimplementasikan. Contohnya Linux atau BSD. Untuk awal belajar, pahami dahulu model konsep di slide; membaca kode kernel baru berguna ketika alur dasarnya sudah jelas.
-
-### Slide 60 — Penutup
-
-![Slide 60: end of chapter](gambar/bab-01/slide-60.jpg)
-
-Inti Bab 1: SO menjadi perantara aplikasi dan perangkat keras, mengalokasikan sumber daya, serta melindungi sistem. Mekanisme kunci yang perlu diceritakan kembali tanpa melihat catatan adalah **boot**, **interrupt**, **system call dan dual-mode**, **timer**, **multiprogramming**, dan **virtualisasi**.
-
-## Latihan yang paling dekat dengan contoh UTS
-
-Soal 1–3 mengadaptasi **contoh UTS 2018/2019 dan 2019 yang ada dalam paket**; redaksi dan pembahasannya ditulis ulang. Soal 4–6 adalah latihan baru yang mengikuti **kisi-kisi UTS 2026**. Tahun dan asal ini penting: latihan baru bukan soal UTS asli.
-
-### 1. Empat komponen dan dua fungsi SO — adaptasi UTS 2019
-
-**Soal.** Gambarkan empat komponen sistem komputer. Dari gambar itu, jelaskan dua fungsi utama SO.
-
-**Pembahasan.** Urutkan `pengguna → aplikasi → SO → perangkat keras`. Fungsi pertama: SO membuat perangkat lebih mudah dipakai melalui layanan dan abstraksi, misalnya aplikasi cukup meminta simpan berkas. Fungsi kedua: SO membagi dan mengendalikan CPU, memori, serta I/O agar beberapa program dapat berjalan aman dan efisien. Jawaban "SO hanya antarmuka" belum cukup karena melewatkan pengelolaan sumber daya.
-
-### 2. Sumber daya fisik dan abstraksi — adaptasi isian UTS 2019
-
-**Soal.** Sebutkan tiga sumber daya perangkat keras utama, lalu contoh abstraksi SO yang memudahkan pemakaiannya.
-
-**Pembahasan.** Yang fisik: **CPU, memori, perangkat I/O**. Abstraksi yang lazim: **proses/thread** untuk pemakaian CPU, **ruang alamat virtual** untuk memori, dan **berkas** untuk penyimpanan/I/O. Pasangan ini menjelaskan *mengapa* aplikasi tidak perlu mengurus rincian fisik; istilah yang dipakai dosen pada soal asli tetap perlu diikuti bila ada batasan jawaban.
-
-### 3. Pengelolaan berkas atau memori? — adaptasi pilihan ganda UTS 2018
-
-**Soal.** Manakah kegiatan pengelolaan berkas: (a) membuat direktori, (b) mengalokasikan RAM proses, (c) memetakan berkas ke penyimpanan sekunder, (d) memasang sistem berkas agar dapat diakses?
-
-**Pembahasan.** **(a), (c), dan (d)** berkaitan dengan berkas/sistem berkas; **(b)** adalah pengelolaan memori. Jika soal memakai frasa *attach/detach devices* alih-alih *mount/unmount file system*, baca konteksnya: menghubungkan perangkat fisik termasuk pengelolaan I/O/penyimpanan, bukan otomatis operasi file. Soal asli UTS 2018 meminta memilih yang **tidak termasuk** file management, dan jawaban yang jelas adalah alokasi/free memori.
-
-### 4. Perpindahan mode — latihan dari kisi-kisi
-
-**Soal.** Aplikasi hendak membaca disk. Bolehkah ia langsung menjalankan instruksi pengendali disk dalam user mode? Jelaskan alurnya.
-
-**Pembahasan.** Tidak. Aplikasi meminta layanan lewat system call. CPU berpindah ke kernel mode; kernel memeriksa permintaan dan memakai driver. Controller mengerjakan I/O, lalu memberi interupsi saat selesai. Kernel mengembalikan hasil dan CPU melanjutkan aplikasi di user mode. Hak khusus dijaga agar satu aplikasi tidak mengganggu seluruh sistem.
-
-### 5. Timer dan program macet — latihan dari kisi-kisi
-
-**Soal.** Program menjalankan `while (true) {}` tanpa henti. Mengapa SO masih dapat mengambil alih CPU?
-
-**Pembahasan.** Kernel memasang timer sebelum program berjalan. Saat timer habis, perangkat keras mengirim interupsi dan CPU masuk ke penangan kernel. Kernel dapat menjadwalkan program lain. Jika program user boleh mematikan timer, perlindungan ini gagal; karena itu pengaturan timer termasuk operasi privileged.
-
-### 6. Multiprogramming, multitasking, dan hypervisor — latihan dari kisi-kisi
-
-**Soal.** (a) CPU berganti pekerjaan saat satu proses menunggu disk. (b) Editor tetap terasa responsif ketika peramban bekerja. (c) Dua SO tamu berbagi satu mesin fisik. Sebutkan konsep terdekat untuk masing-masing.
-
-**Pembahasan.** (a) **Multiprogramming**, untuk memakai CPU saat ada pekerjaan yang menunggu. (b) **Multitasking/time-sharing**, agar interaksi tetap responsif melalui pergantian cepat. (c) **Virtualisasi**, diatur hypervisor/VMM. Satu sistem bisa menerapkan ketiganya sekaligus.
-
-## Ringkasan istilah prioritas UTS
-
-| Istilah | Arti satu kalimat | Pembeda penting |
+| Permintaan | Pengelolaan terdekat | Mengapa |
 |---|---|---|
-| Kernel | Inti SO yang menjalankan operasi dengan hak khusus. | Bukan seluruh aplikasi bawaan. |
-| Resource allocator | Pengatur pembagian CPU, memori, dan I/O. | Memilih pemakai dan waktu pemakaian. |
-| Interrupt | Sinyal agar CPU menangani peristiwa lalu melanjutkan tugas. | Berasal dari perangkat/timer; trap berasal dari eksekusi instruksi. |
-| User/kernel mode | Dua tingkat hak eksekusi. | Instruksi privileged hanya di kernel mode. |
-| System call | Permintaan layanan SO dari aplikasi. | Jalan terkendali dari user ke kernel mode. |
-| Timer | Pemicu interupsi setelah jatah waktu. | Mengembalikan kendali CPU ke kernel. |
-| Multiprogramming | Beberapa pekerjaan siap agar CPU tidak banyak menganggur. | Fokus pemanfaatan CPU. |
-| Multitasking | CPU berganti tugas cepat demi respons interaktif. | Fokus pengalaman pengguna. |
-| Boot loader | Kode awal yang memuat kernel saat boot. | Bekerja sebelum kernel siap. |
-| Hypervisor/VMM | Pengelola mesin virtual. | Membagi mesin fisik bagi OS tamu. |
+| Menjalankan aplikasi | Proses dan memori | Perlu dibuat, diberi ruang, dan dijadwalkan. |
+| Membuat folder | Sistem berkas | Mengubah struktur nama data. |
+| Membebaskan RAM aplikasi | Memori | Ruang dikembalikan untuk pekerjaan lain. |
+| Mengantre dokumen pada printer | I/O dan spooling | Pekerjaan menunggu giliran perangkat. |
 
-## Sumber dalam paket Sensei
+## 1.6 Security and Protection — Siapa boleh mengakses apa?
 
-- `OS/K1.pdf`, 60 halaman, **Chapter 1: Introduction**, bahan slide dari *Operating System Concepts*, edisi ke-10.
-- `OS/Kisi kisi.pdf`, bagian **Pertemuan 1. Pengantar sistem operasi** dan ketentuan UTS.
-- `OS/Contoh Soal/UTS Sistem Operasi 2018.pdf`, soal A.1 dan pertanyaan terkait pengelolaan SO.
-- `OS/Contoh Soal/UTS Sistem Operasi 2019.pdf`, isian 1–2 dan uraian 1.
-- Abraham Silberschatz, Peter B. Galvin, dan Greg Gagne, *Operating System Concepts*, edisi ke-10, PDF referensi dalam paket. Buku digunakan untuk mengecek istilah; susunan pembahasan mengikuti slide K1.
+**Protection** menetapkan dan menegakkan hak akses terhadap sumber daya. **Security** melindungi sistem dari penyalahgunaan dan serangan, baik dari dalam maupun luar. Perlindungan adalah bagian dari keamanan, bukan sinonim yang sepenuhnya sama.
 
-Gambar slide berasal dari K1.pdf yang Sensei lampirkan. Keterangan, contoh, dan pembahasan di dokumen ini ditulis ulang untuk belajar; soal adaptasi diberi asalnya agar tidak disangka salinan UTS terbaru.
+![Protection dan security; K1.pdf halaman 43](gambar/bab-01/slide-43.jpg)
+
+SO mengaitkan identitas pengguna dan kelompok dengan proses serta berkas; pada sistem mirip Unix istilahnya **UID** dan **GID**. Jika izin melarang, proses pengguna biasa tidak boleh membaca berkas pribadi orang lain. Dual-mode juga penting: pemeriksaan izin akan mudah dilewati bila aplikasi boleh menjalankan instruksi istimewa secara langsung.
+
+## 1.7 Virtualization — Beberapa lingkungan pada satu mesin
+
+**Virtualisasi** memungkinkan beberapa lingkungan komputasi memakai satu mesin fisik. **Hypervisor** atau **virtual machine manager (VMM)** membagi CPU, memori, dan I/O di antara **mesin virtual (VM)**. Tiap VM dapat memiliki SO tamu dan aplikasi sendiri. VMM dapat berjalan langsung di perangkat keras atau di atas SO host, bergantung rancangannya.
+
+![Perangkat fisik, VMM, dan SO tamu; K1.pdf halaman 46](gambar/bab-01/slide-46.jpg)
+
+```text
+ Aplikasi A                  Aplikasi B
+ SO tamu A                   SO tamu B
+       └────── hypervisor/VMM ──────┘
+             perangkat keras fisik
+```
+
+**Emulasi** meniru arsitektur lain agar instruksi yang berbeda dapat dijalankan, sering dengan biaya kinerja lebih besar. **Interpretasi** mengeksekusi melalui penafsir perangkat lunak. Keduanya tidak otomatis sama dengan virtualisasi CPU berarsitektur sama. VM berguna untuk menguji SO, mengisolasi lingkungan percobaan, dan menjalankan beberapa layanan pada satu mesin fisik. Isolasi tetap bergantung pada hypervisor yang bekerja benar.
+
+## 1.8 Distributed Systems — Kerja sama antar-komputer
+
+Sistem terdistribusi menghubungkan **komputer terpisah** melalui jaringan. Tiap komputer punya sumber daya dan kemungkinan gagal sendiri. Jaringan memungkinkan pertukaran pesan, berbagi berkas, dan pembagian pekerjaan. **LAN** mencakup area lokal, **MAN** kota, **WAN** area luas, dan **PAN** area pribadi dekat; istilah itu menunjukkan cakupan jaringan, bukan jenis kernel.
+
+![Ilustrasi sistem terdistribusi; K1.pdf halaman 47](gambar/bab-01/slide-47.jpg)
+
+**Network OS** memungkinkan mesin mandiri berkomunikasi dan berbagi layanan. **Distributed OS** mencoba memberi kesan pengelolaan yang lebih terpadu. Koneksi jaringan saja belum berarti semua mesin menjalankan satu SO terdistribusi. Masalah khasnya ialah pesan dapat terlambat/hilang dan satu mesin bisa gagal sementara yang lain tetap bekerja.
+
+## 1.9 Kernel Data Structures — Bagaimana kernel mencatat keadaan?
+
+Kernel perlu mencatat proses siap, perangkat aktif, dan blok penyimpanan kosong. Struktur data dipilih menurut operasi yang sering dilakukan. Ini pengantar peran struktur data dalam SO, bukan tuntutan menghafal implementasi tertentu.
+
+### 1.9.1 Lists, Stacks, and Queues
+
+**Array** memungkinkan akses langsung melalui indeks. **Linked list** menghubungkan elemen dengan penunjuk; daftar ganda juga menunjuk ke elemen sebelumnya. **Stack** melayani yang terakhir masuk lebih dulu (*LIFO*), sedangkan **queue** biasanya melayani yang pertama masuk lebih dulu (*FIFO*). Antrean proses nyata bisa memakai aturan prioritas yang lebih rumit.
+
+![Linked list; K1.pdf halaman 48](gambar/bab-01/slide-48.jpg)
+
+### 1.9.2 Trees
+
+Pohon mengatur data secara bercabang. Pada *binary search tree*, aturan kiri dan kanan memudahkan pencarian. Jika seimbang, pencarian dapat berorde `O(log n)`; jika sangat timpang, dapat menjadi `O(n)`. Rincian analisis kompleksitas tidak menjadi pokok hitungan Bab 1.
+
+### 1.9.3 Hash Functions and Maps
+
+Fungsi hash memetakan kunci ke lokasi pencarian. Dua kunci bisa menuju lokasi sama (**collision**), sehingga perlu aturan penanganannya. Kernel dapat memakainya untuk menemukan objek berdasarkan identitas dengan cepat.
+
+### 1.9.4 Bitmaps
+
+**Bitmap** memakai satu bit untuk menandai satu objek, misalnya blok disk kosong atau terpakai. Jika ada `N` blok, penandanya perlu `N` bit, setara `⌈N/8⌉` byte sebelum tambahan penyimpanan lain. Untuk 16 blok, cukup 2 byte penanda. Arti `0` dan `1` harus mengikuti definisi contoh; tidak universal.
+
+## 1.10 Computing Environments — Di mana SO dipakai?
+
+### 1.10.1 Traditional Computing
+
+PC dan server kini hampir selalu terhubung jaringan. Sistem **batch** memproses pekerjaan dengan input yang sudah disiapkan; sistem **interaktif** harus merespons pengguna. Teknik berbagi waktu CPU yang dahulu melayani banyak pengguna juga dipakai laptop modern ketika banyak aplikasi aktif.
+
+### 1.10.2 Mobile Computing
+
+Ponsel dan tablet mengutamakan portabilitas, sensor, koneksi nirkabel, dan penggunaan baterai. SO menyeimbangkan kelancaran aplikasi dengan daya. Perangkat mobile tidak otomatis sistem real-time; terlambat menampilkan chat berbeda dari gagal memenuhi tenggat pengendali mesin.
+
+### 1.10.3 Client–Server Computing
+
+**Client** meminta layanan, **server** menjawab. Browser yang meminta halaman ialah client, mesin yang menyediakannya server. Ini peran komunikasi, bukan ukuran atau harga komputer. Satu mesin dapat menjadi client untuk satu layanan dan server untuk yang lain.
+
+Contoh alurnya: browser mengirim permintaan halaman, server memprosesnya lalu mengembalikan hasil. Keduanya mempunyai SO sendiri yang mengelola proses, memori, dan jaringan. Tidak ada satu CPU bersama seperti pada SMP; pertukaran data dilakukan lewat jaringan.
+
+### 1.10.4 Peer-to-Peer Computing
+
+Pada **peer-to-peer (P2P)**, simpul dapat meminta sekaligus menyediakan layanan. Tantangannya adalah menemukan peer dan menyesuaikan diri saat peer masuk atau keluar. Pada client–server, peran penyedia layanan biasanya lebih tetap.
+
+Misalnya beberapa komputer saling menyediakan potongan berkas. Komputer A dapat mengambil potongan dari B sambil menyediakan potongan lain bagi C. Ini tidak berarti semua simpul harus identik kuatnya; ciri pembeda P2P adalah kemampuan tiap simpul mengambil *dan* menyediakan layanan.
+
+### 1.10.5 Cloud Computing
+
+Cloud menyediakan sumber daya melalui jaringan sesuai kebutuhan. **IaaS** menyediakan infrastruktur virtual, **PaaS** lingkungan menjalankan aplikasi, dan **SaaS** aplikasi siap pakai. Virtualisasi sering menjadi bahan dasarnya, tetapi cloud juga perlu jaringan dan pengelolaan layanan. Satu VM lokal saja belum berarti layanan cloud.
+
+Bayangkan Sensei ingin menjalankan aplikasi web. Pada IaaS, Sensei mengurus SO tamu dan aplikasi di atas mesin virtual. Pada PaaS, penyedia menyiapkan lingkungan tempat aplikasi dijalankan sehingga Sensei lebih fokus pada aplikasinya. Pada SaaS, pengguna langsung memakai aplikasi yang sudah tersedia. Batas tanggung jawab ini lebih membantu daripada menghafal kepanjangan singkatan saja.
+
+![Susunan cloud; K1.pdf halaman 56](gambar/bab-01/slide-56.jpg)
+
+### 1.10.6 Real-Time Embedded Systems
+
+Perangkat tertanam biasanya memiliki tugas khusus. Pada sistem **real-time**, jawaban benar yang datang sesudah batas waktu dapat dianggap gagal. Pengendali rem perlu bereaksi sebelum tenggat, bukan sekadar cepat secara rata-rata. Ada tenggat keras dan tenggat yang lebih toleran; cara menjadwalkannya dibahas pada materi real-time.
+
+Bandingkan dua kejadian: pemutar musik terlambat sebentar dan suara tersendat; pengendali rem terlambat pada saat kendaraan harus berhenti. Keduanya tidak nyaman, tetapi akibat pelanggaran tenggat berbeda. Karena itu memilih SO atau penjadwal untuk perangkat tertanam dimulai dari pertanyaan **berapa batas waktu respons yang dapat diterima**, bukan hanya “CPU-nya cepat atau tidak?”.
+
+## 1.11 Free and Open-Source Operating Systems — Belajar dari sumber terbuka
+
+Kode sumber yang tersedia memungkinkan rancangan SO dipelajari dan diuji. **Perangkat lunak bebas** menekankan kebebasan pengguna sesuai lisensinya; **open source** menekankan keterbukaan sumber dan model pengembangan. “Gratis dipakai” tidak otomatis memberi hak mempelajari atau mengubah kode. Hak yang tepat harus dibaca dari lisensi proyek.
+
+### 1.11.1 History — Dari berbagi kode ke lisensi
+
+Berbagi kode sudah berlangsung sejak awal komputasi. Ketika perangkat lunak mulai dipasarkan terpisah, aturan pemakaian dan distribusi menjadi lebih penting. Sejarah ini menjelaskan mengapa melihat kode sumber merupakan hak yang perlu dinyatakan oleh lisensi, bukan akibat otomatis dari membeli atau mengunduh sebuah program.
+
+### 1.11.2 Free Operating Systems — Kebebasan pengguna
+
+Gerakan perangkat lunak bebas menekankan hak memakai, mempelajari, mengubah, dan menyebarkan perangkat lunak sesuai lisensinya. Kata *free* di sini terutama berbicara tentang kebebasan, bukan sekadar harga nol. Bagi pelajar SO, kode terbuka memungkinkan konsep penjadwalan atau memori dibandingkan dengan implementasi nyata.
+
+### 1.11.3 GNU/Linux
+
+**Linux** adalah kernel. Sebuah distribusi **GNU/Linux** menggabungkannya dengan pustaka, program sistem, alat pengelolaan, dan aplikasi lain. Inilah contoh konkret pembedaan pada 1.1.3: kernel bukan seluruh perangkat lunak yang pengguna temui ketika sebuah komputer selesai menyala.
+
+### 1.11.4 BSD UNIX
+
+**BSD** adalah keluarga sistem mirip Unix dengan tradisi kode sumber terbuka. Berbeda dari istilah “Linux” yang terutama menunjuk kernel, nama sebuah sistem BSD biasanya merujuk pada sistem dasar yang dikembangkan sebagai satu kesatuan. Untuk Bab 1, kenali BSD sebagai contoh SO yang implementasinya dapat dipelajari.
+
+### 1.11.5 Solaris
+
+Buku memasukkan **Solaris** sebagai contoh ekosistem SO berbasis Unix dan sejarah pembukaan sumbernya. Status lisensi suatu komponen dapat berbeda dari komponen lain dan dapat berubah dari waktu ke waktu. Karena itu jangan menyimpulkan semua program dalam satu produk mempunyai izin penggunaan yang sama.
+
+### 1.11.6 Open-Source Systems as Learning Tools
+
+Kode sumber paling membantu setelah model dasarnya dipahami. Konsep interrupt pada 1.2 memberi alasan mengapa kernel membutuhkan penangan; kode nyata memperlihatkan susunan penangan pada arsitektur tertentu. Mulai dari pertanyaan konsep, baru cari implementasinya.
+
+## Peta hubungan konsep untuk UTS
+
+| Bila soal menyebut… | Alur yang perlu dipikirkan | Jangan tertukar dengan… |
+|---|---|---|
+| Aplikasi menyimpan berkas | aplikasi → layanan SO → driver/controller → penyimpanan | aplikasi mengatur SSD langsung |
+| Program menunggu disk | pekerjaan lain mendapat CPU | paralelisme pada satu inti |
+| Program berulang tanpa akhir | timer mengembalikan kendali kernel | program harus rela berhenti sendiri |
+| Aplikasi meminta layanan | system call → kernel mode → kembali | selalu berganti proses |
+| Dua SO pada satu mesin | hypervisor membagi perangkat fisik | cluster beberapa komputer |
+| Banyak CPU pada satu mesin | multiprosesor/SMP | multiprogramming pada satu CPU |
+
+## Contoh soal dan pembahasan
+
+Soal 1–3 **diadaptasi** dari UTS 2018/2019 dan 2019 dalam paket Sensei; redaksinya ditulis ulang. Soal 4–7 ialah **latihan baru** berdasarkan kisi-kisi UTS 2026, bukan soal ujian asli.
+
+### Soal 1 — Empat komponen dan dua fungsi SO (adaptasi UTS 2019)
+
+**Pertanyaan.** Gambarkan empat komponen komputer dan jelaskan dua fungsi SO.
+
+**Pembahasan.** Gambar `pengguna → aplikasi → SO → perangkat keras`. CPU, memori, dan I/O termasuk perangkat keras. SO **mengalokasikan** sumber daya kepada pekerjaan yang perlu dan **mengendalikan** penggunaannya agar program tidak saling mengganggu. Contoh: penyunting meminta penulisan berkas; SO mengatur akses disk dan mencegah penyunting menimpa memori aplikasi lain. Jawaban “SO penghubung” saja belum menjelaskan kedua fungsi.
+
+### Soal 2 — Fisik dan abstraksi (adaptasi UTS 2019)
+
+**Pertanyaan.** Sebutkan tiga sumber daya perangkat keras utama dan contoh abstraksi yang memudahkan pemakaiannya.
+
+**Pembahasan.** Sumber daya fisiknya **CPU, memori, I/O**. Contoh abstraksinya **proses/thread**, **ruang alamat proses**, dan **berkas** untuk penyimpanan. Tidak semua I/O identik dengan berkas, tetapi berkas contoh utama penyembunyian rincian penyimpanan. Soal asli berupa isian; jika pengajar memberi pilihan istilah, ikuti istilah yang diminta.
+
+### Soal 3 — Berkas atau memori? (adaptasi UTS 2018)
+
+**Pertanyaan.** Mana yang *bukan* pengelolaan berkas: membuat direktori, mengalokasikan dan membebaskan RAM, atau memetakan berkas ke penyimpanan sekunder?
+
+**Pembahasan.** **Mengalokasikan dan membebaskan RAM** termasuk pengelolaan memori. Dua pilihan lain menyangkut sistem berkas. UTS lama juga menyebut *attach/detach devices*; maknanya perlu dibaca sesuai konteks pemasangan perangkat atau sistem berkas, sehingga pilihan RAM menjadi pembeda yang paling jelas.
+
+### Soal 4 — Timer dan dual-mode (latihan dari kisi-kisi)
+
+**Pertanyaan.** Aplikasi menjalankan `while (true)` lalu mencoba mematikan timer. Mengapa langkah kedua tidak boleh, dan bagaimana SO mengambil CPU kembali?
+
+**Pembahasan.** Aplikasi berjalan di **user mode**; pengaturan timer merupakan operasi istimewa sehingga aplikasi tidak boleh melakukannya langsung. Kernel sudah menyiapkan timer. Ketika waktunya habis, interrupt membawa CPU ke penangan kernel, yang dapat memilih proses lain. Loop tersebut tidak harus selesai agar SO mendapat kendali.
+
+### Soal 5 — Tiga pemicu masuk kernel (latihan dari kisi-kisi)
+
+**Pertanyaan.** (a) Aplikasi meminta baca berkas. (b) Disk selesai mentransfer data. (c) Program membagi dengan nol. Sebutkan pemicu pada tiap kasus.
+
+**Pembahasan.** (a) **System call**, permintaan sadar aplikasi. (b) **Interrupt perangkat**, pemberitahuan controller. (c) **Exception/trap**, akibat instruksi yang salah. Ketiganya dapat membawa CPU ke kode kernel, tetapi asal kejadiannya berbeda. Masuk kernel mode tidak selalu berarti berganti proses.
+
+### Soal 6 — Multitasking bukan multiprosesor (latihan dari kisi-kisi)
+
+**Pertanyaan.** Komputer satu inti menjalankan editor saat peramban menunggu jaringan. Keduanya lalu bergantian mendapat jatah CPU agar responsif. Apakah komputer ini harus punya dua CPU?
+
+**Pembahasan.** Tidak. Memanfaatkan CPU saat proses lain menunggu adalah **multiprogramming**; pergantian jatah cepat untuk respons adalah **multitasking**. **Multiprosesor** membutuhkan lebih dari satu unit pemrosesan yang dapat bekerja paralel. Banyak aplikasi tampak aktif bukan bukti jumlah CPU.
+
+### Soal 7 — Hypervisor atau cluster? (latihan dari kisi-kisi)
+
+**Pertanyaan.** A: satu komputer fisik menjalankan dua SO tamu. B: dua komputer fisik bekerja sama menjaga satu layanan. Apa konsep terdekat untuk masing-masing?
+
+**Pembahasan.** A adalah **virtualisasi**: hypervisor membagi satu mesin fisik untuk beberapa VM. B adalah **cluster**: beberapa komputer fisik terpisah bekerja sama. VM bisa dipakai di dalam sebuah cluster, jadi kedua istilah dapat muncul dalam satu rancangan tetapi menjelaskan lapisan berbeda.
+
+## Uji pemahaman akhir
+
+Ceritakan satu alur tanpa melihat catatan: komputer menyala; kernel dimuat; dua program aktif; salah satunya meminta data disk; controller selesai; timer berbunyi; sebuah VM juga berjalan. Tempatkan **boot loader, kernel, multiprogramming, system call, driver/controller, interrupt, timer, user/kernel mode, dan hypervisor** pada peristiwa yang tepat. Jika alurnya bisa dijelaskan, konsep utama Bab 1 sudah tersambung.
+
+## Sumber dan batas cakupan
+
+- Silberschatz, Galvin, dan Gagne, *Operating System Concepts*, edisi ke-10, Bab 1, subbab 1.1–1.11, dalam PDF referensi pada `OS.zip`.
+- `K1.pdf`, 60 halaman slide kuliah. Gambar di atas berasal dari halaman PDF yang disebut pada teks gambar; angka kecil pada kaki slide kadang berbeda dari urutan PDF.
+- `Kisi kisi.pdf`, bagian Pertemuan 1, serta contoh UTS 2018 dan 2019. Kisi-kisi memandu prioritas belajar, bukan jaminan seluruh soal ujian terbatas pada daftar itu.
+- `Latihan Soal K1 - Pendahuluan Sistem Operasi.pdf` dipakai untuk melihat tingkat latihan dasar. Beberapa pilihannya menyederhanakan hal yang bergantung pada konteks; penjelasan di sini mengikuti mekanisme buku dan slide.
+
+Penjelasan serta contoh di sini ditulis ulang untuk belajar. Materi ini tidak menyalin panjang isi buku atau semua slide. Dalam paket Sensei terdapat kisi-kisi, tetapi dokumen kontrak kuliah terpisah tidak ditemukan.
