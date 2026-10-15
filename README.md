@@ -2,6 +2,8 @@
 
 Materi belajar Sistem Operasi berdasarkan bahan kuliah dan contoh soal yang disediakan.
 
+- [Cheatsheet UTS menurut kemampuan yang diuji pada kisi-kisi](cheatsheet-kisi-kisi-uts.md)
+
 - [Bab 1 — Pengantar Sistem Operasi, penjelasan menurut subbab buku dengan gambar dan latihan UTS](bab-01-pengantar-sistem-operasi.md)
 - [Bab 2 — Layanan dan struktur sistem operasi (59 slide)](bab-02-layanan-dan-struktur-sistem-operasi.md)
 - [Bab 3 — Proses (74 slide)](bab-03-proses.md)
