@@ -1,586 +1,235 @@
-# Bab 3 — Proses, slide demi slide
-Gambar mengikuti halaman 1–74 dari `K3.pdf` dalam paket Sensei. Nomor slide di bawah adalah halaman PDF asli. Pembahasan menekankan alur konsep; contoh hitungan di akhir memakai konvensi kisi-kisi.
+# Bab 3 — Proses
 
-**Fokus UTS:** Proses vs program, bagian memori, PCB, state, context switch, fork/exec/wait, zombie/orphan, dan IPC.
+Bab ini mengikuti subbab 3.1–3.9 *Operating System Concepts* edisi ke-10. Penjelasan diselaraskan dengan `K3.pdf`, latihan K3, dan soal UTS 2022 dalam bahan kuliah Sensei. Gambar slide dipakai pada konsep yang lebih mudah dipahami secara visual. Bab ini terutama menuntut pembacaan alur dan pembedaan istilah; tidak ada rumus hitung utama.
 
-## Pembahasan setiap slide
+**Peta belajar:** program menjadi proses → proses berganti keadaan → kernel menyimpan keadaan di PCB → penjadwal memilih proses → proses dibuat atau dihentikan → proses saling bertukar data.
 
-### Slide 001 — Chapter 3: Processes
+## 3.1 Process Concept — Program yang sedang bekerja
 
-![Slide 1: Chapter 3: Processes](gambar/pertemuan-03/slide-001.jpg)
+### 3.1.1 The Process
 
-Slide ini memetakan posisi topik dalam bab. Pakai judul-judulnya sebagai daftar cek; utamakan hubungan sebab-akibat dan contoh, bukan hafalan urutan.
+Program adalah instruksi pasif yang tersimpan di disk. Proses adalah *satu pelaksanaan* program itu: ada instruksi yang sedang/akan dikerjakan, nilai register, lokasi instruksi berikutnya (*program counter*), dan data kerja. Dua kali membuka program yang sama dapat menghasilkan dua proses dengan keadaan berbeda. Jadi nama program saja tidak cukup untuk mengenali sebuah proses.
 
-### Slide 002 — Outline
+![Bagian memori sebuah proses dari K3, halaman 6](gambar/pertemuan-03/slide-006.jpg)
 
-![Slide 2: Outline](gambar/pertemuan-03/slide-002.jpg)
+- **Text** memuat instruksi program. **Data** memuat variabel global atau statis.
+- **Heap** memuat alokasi dinamis yang diminta saat program berjalan. **Stack** memuat bingkai pemanggilan fungsi, seperti parameter, variabel lokal, dan alamat kembali.
+- Heap dan stack dapat berubah ukuran. Gambar menunjukkan susunan *konseptual* ruang alamat; letak fisik di RAM tidak wajib berurutan seperti gambar.
 
-Slide ini memetakan posisi topik dalam bab. Pakai judul-judulnya sebagai daftar cek; utamakan hubungan sebab-akibat dan contoh, bukan hafalan urutan.
+Contoh: editor teks yang dibuka dua kali dapat memakai instruksi aplikasi yang sama, tetapi setiap proses mempunyai dokumen dan posisi kerja sendiri. Jika satu proses berhenti, proses lain tidak otomatis ikut berhenti.
 
-### Slide 003 — Objectives
+### 3.1.2 Process State
 
-![Slide 3: Objectives](gambar/pertemuan-03/slide-003.jpg)
+Proses tidak selalu memakai CPU. Ia dapat berada dalam **new** (sedang dibuat), **ready** (siap, menunggu CPU), **running** (instruksi sedang dieksekusi), **waiting** (menunggu kejadian seperti I/O), atau **terminated** (selesai).
 
-Slide ini memetakan posisi topik dalam bab. Pakai judul-judulnya sebagai daftar cek; utamakan hubungan sebab-akibat dan contoh, bukan hafalan urutan.
+![Diagram keadaan proses dari K3, halaman 9](gambar/pertemuan-03/slide-009.jpg)
 
-### Slide 004 — Process Concept
+```text
+new → ready → running → terminated
+          ↑       │
+          │       ├─ jatah CPU habis / didahului proses lain → ready
+          │       └─ meminta I/O → waiting
+          └──────────── I/O selesai ────────┘
+```
 
-![Slide 4: Process Concept](gambar/pertemuan-03/slide-004.jpg)
+Perbedaan penting: proses **ready** sudah bisa berjalan tetapi belum mendapat CPU; proses **waiting** belum bisa maju karena menunggu peristiwa. Setelah I/O selesai, proses biasanya kembali ke **ready**, bukan langsung ke **running**; penjadwal masih harus memilihnya. Pada satu inti CPU, hanya satu proses berada dalam running pada suatu saat. Pada banyak inti, masing-masing inti dapat menjalankan proses.
 
-Program adalah kode pasif; proses adalah program yang sedang dijalankan beserta state-nya. Ruang proses biasanya memuat text, data, heap, dan stack. PCB menyimpan konteks seperti state, program counter, register, dan informasi penjadwalan agar proses dapat dilanjutkan.
+### 3.1.3 Process Control Block (PCB)
 
-**Perhatikan pada gambar:** ▪ An operating system executes a variety of programs that run as a; ▪ Process – a program in execution; process execution must progress
+Kernel perlu mengingat keadaan tiap proses agar bisa menghentikannya sementara lalu melanjutkannya. Catatan itu disebut **PCB**. Isinya antara lain identitas proses, state, program counter, register, informasi penjadwalan, pengelolaan memori, akuntansi, dan status I/O. Saat proses A diganti B, nilai penting A disimpan dan nilai B dipulihkan. PCB adalah catatan kernel mengenai proses, bukan seluruh isi program atau salinan lengkap RAM-nya.
 
-### Slide 005 — Process Concept (Cont.)
+![Isi PCB dari K3, halaman 10](gambar/pertemuan-03/slide-010.jpg)
 
-![Slide 5: Process Concept (Cont.)](gambar/pertemuan-03/slide-005.jpg)
+**Contoh singkat:** A sedang menjalankan instruksi ke-20 lalu waktunya habis. Agar nanti tidak mulai lagi dari instruksi pertama, kernel menyimpan posisi dan register A di PCB. Ketika A mendapat CPU lagi, keadaan itu dipulihkan.
 
-Program adalah kode pasif; proses adalah program yang sedang dijalankan beserta state-nya. Ruang proses biasanya memuat text, data, heap, dan stack. PCB menyimpan konteks seperti state, program counter, register, dan informasi penjadwalan agar proses dapat dilanjutkan.
+## 3.2 Process Scheduling — Siapa mendapat CPU?
 
-**Perhatikan pada gambar:** ▪ Program is passive entity stored on disk (executable file);; • Program becomes process when an executable file is
+### 3.2.1 Scheduling Queues
 
-### Slide 006 — Process in Memory
+Proses yang siap diletakkan di **ready queue**. Proses yang menunggu disk atau kejadian lain berada dalam antrean tunggu yang sesuai. Istilah *queue* menyatakan kumpulan kandidat; kebijakan memilihnya tidak selalu sekadar urutan masuk. Penjadwal memilih proses dari ready queue ketika CPU tersedia.
 
-![Slide 6: Process in Memory](gambar/pertemuan-03/slide-006.jpg)
+![Antrean ready dan wait dari K3, halaman 15](gambar/pertemuan-03/slide-015.jpg)
 
-Program adalah kode pasif; proses adalah program yang sedang dijalankan beserta state-nya. Ruang proses biasanya memuat text, data, heap, dan stack. PCB menyimpan konteks seperti state, program counter, register, dan informasi penjadwalan agar proses dapat dilanjutkan.
+Ikuti satu contoh: A sedang running dan meminta baca disk. A masuk antrean tunggu disk. B dipilih dari ready queue dan berjalan. Saat pembacaan A selesai, A kembali ke ready queue; B boleh terus berjalan sampai ada alasan untuk berpindah. **Interrupt bukan selalu berarti A langsung memakai CPU.**
 
-### Slide 007 — Memory Layout of a C Program
+### 3.2.2 CPU Scheduling
 
-![Slide 7: Memory Layout of a C Program](gambar/pertemuan-03/slide-007.jpg)
+Penjadwalan berusaha memakai CPU dengan baik dan menjaga respons aplikasi. Keputusan dapat terjadi saat proses menunggu I/O, selesai, atau didahului karena jatah waktu habis. Pemilihan proses berikutnya dan pemindahan CPU adalah dua langkah berbeda: **scheduler** memilih, **dispatcher** melaksanakan peralihan. Aturan rinci FCFS, SJF, dan Round Robin dibahas pada Bab 5.
 
-Program adalah kode pasif; proses adalah program yang sedang dijalankan beserta state-nya. Ruang proses biasanya memuat text, data, heap, dan stack. PCB menyimpan konteks seperti state, program counter, register, dan informasi penjadwalan agar proses dapat dilanjutkan.
+### 3.2.3 Context Switch
 
-### Slide 008 — Process State
+**Context switch** menyimpan konteks proses yang berhenti dan memulihkan konteks proses berikutnya. Konteks minimal mencakup posisi instruksi dan register; rincian lain bergantung sistem. Selama perpindahan, CPU bekerja untuk kernel dan belum memajukan instruksi aplikasi. Karena itu, perpindahan punya biaya.
 
-![Slide 8: Process State](gambar/pertemuan-03/slide-008.jpg)
+![Perpindahan konteks A ke B dari K3, halaman 16](gambar/pertemuan-03/slide-016.jpg)
 
-Proses ready siap memakai CPU, running sedang memakai CPU, dan waiting menunggu peristiwa seperti I/O. Habis jatah CPU: running ke ready. Meminta I/O: running ke waiting. I/O selesai: waiting ke ready.
+Urutannya: timer atau peristiwa lain membawa kendali ke kernel → kernel menyimpan A → memilih B → memulihkan B → B berjalan. Jangan samakan **context switch**, **perpindahan user/kernel mode**, dan **pembuatan proses**. System call dapat masuk kernel lalu kembali ke proses yang sama tanpa mengganti proses.
 
-**Perhatikan pada gambar:** ▪ As a process executes, it changes state; • New: The process is being created
+## 3.3 Operations on Processes — Lahir dan berakhirnya proses
 
-### Slide 009 — Diagram of Process State
+### 3.3.1 Process Creation
 
-![Slide 9: Diagram of Process State](gambar/pertemuan-03/slide-009.jpg)
+Suatu proses dapat membuat proses anak sehingga terbentuk hubungan induk–anak. Anak mendapat identitasnya sendiri. Sumber daya dapat diwariskan atau dibagikan menurut aturan sistem; jangan menganggap semua data otomatis dibagi. Di Unix, `fork()` membuat proses anak. Kedua alur melanjutkan eksekusi setelah `fork()`, tetapi nilai kembalinya berbeda: induk menerima identitas anak, anak menerima 0. Setelah itu, anak sering memanggil keluarga `exec()` untuk **mengganti program yang dijalankan dalam proses anak**. `exec()` tidak membuat proses baru.
 
-Proses ready siap memakai CPU, running sedang memakai CPU, dan waiting menunggu peristiwa seperti I/O. Habis jatah CPU: running ke ready. Meminta I/O: running ke waiting. I/O selesai: waiting ke ready.
+![Pohon proses dari K3, halaman 21](gambar/pertemuan-03/slide-021.jpg)
 
-### Slide 010 — Process Control Block (PCB)
+```text
+shell (induk)
+  └─ fork() → proses anak
+                └─ exec("program") → program baru berjalan dalam anak
+shell dapat wait() untuk mengambil hasil anak
+```
 
-![Slide 10: Process Control Block (PCB)](gambar/pertemuan-03/slide-010.jpg)
+Jika `fork()` dipanggil sekali oleh satu proses dan berhasil, sesudahnya ada dua proses. Jika keduanya kembali memanggil `fork()`, jumlah dapat bertambah lagi. Hitung berdasarkan *proses mana yang mencapai panggilan*, bukan hanya jumlah baris kode. `fork()` juga dapat gagal, sehingga hitungan soal biasanya mengandaikan keberhasilan.
 
-Program adalah kode pasif; proses adalah program yang sedang dijalankan beserta state-nya. Ruang proses biasanya memuat text, data, heap, dan stack. PCB menyimpan konteks seperti state, program counter, register, dan informasi penjadwalan agar proses dapat dilanjutkan.
+### 3.3.2 Process Termination
 
-**Perhatikan pada gambar:** Information associated with each process(also called task; ▪ Process state – running, waiting, etc.
+Proses selesai secara normal lewat `exit()` atau dihentikan karena galat/perintah. Pada Unix, induk memakai `wait()` atau sejenisnya untuk mengambil status akhir anak. **Zombie** ialah anak yang sudah selesai tetapi informasi akhirnya belum diambil induk. Ia tidak lagi menjalankan program, namun entri statusnya masih perlu dibereskan. **Orphan** ialah anak yang masih hidup setelah induknya berakhir; sistem akan mengalihkan pengasuhan menurut mekanismenya. Orphan dan zombie berbeda: yang satu soal induk yang hilang, yang lain soal status anak selesai yang belum diambil.
 
-### Slide 011 — Threads
+![Pembuatan dan akhir proses dari K3, halaman 27](gambar/pertemuan-03/slide-027.jpg)
 
-![Slide 11: Threads](gambar/pertemuan-03/slide-011.jpg)
+## 3.4 Interprocess Communication — Mengapa proses perlu bicara?
 
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
+Proses independen tidak saling memengaruhi; **proses kooperatif** sengaja berbagi hasil. Contohnya peramban mengirim permintaan ke proses layanan, atau penghasil data menyerahkannya ke pengolah data. Alasan bekerja sama meliputi berbagi informasi, mempercepat pekerjaan yang dapat dipisah, dan menyusun sistem menjadi bagian-bagian kecil. Dua model utama ialah **shared memory** dan **message passing**.
 
-**Perhatikan pada gambar:** ▪ So far, process has a single thread of execution; ▪ Consider having multiple program counters per process
+![Dua model komunikasi dari K3, halaman 37](gambar/pertemuan-03/slide-037.jpg)
 
-### Slide 012 — Process Representation in Linux
+Pada shared memory, kedua proses memakai wilayah memori bersama dan perlu sepakat kapan membaca atau menulis. Pada message passing, proses memakai operasi kirim dan terima; kernel atau sarana komunikasi mengurus perpindahannya. Keduanya dapat dipakai di satu sistem. Pilihan bergantung ukuran data, biaya pertukaran, kebutuhan sinkronisasi, dan apakah proses berada di mesin yang sama.
 
-![Slide 12: Process Representation in Linux](gambar/pertemuan-03/slide-012.jpg)
+## 3.5 IPC in Shared-Memory Systems
 
-Program adalah kode pasif; proses adalah program yang sedang dijalankan beserta state-nya. Ruang proses biasanya memuat text, data, heap, dan stack. PCB menyimpan konteks seperti state, program counter, register, dan informasi penjadwalan agar proses dapat dilanjutkan.
+Misalkan proses *producer* membuat data dan *consumer* memakainya. Keduanya dapat mengakses buffer bersama. Producer menaruh item pada slot berikutnya; consumer mengambil item dari slot berikutnya. Jika buffer berkapasitas `N`, indeks melingkar diperbarui dengan `(indeks + 1) mod N` agar kembali ke slot pertama setelah slot terakhir.
 
-**Perhatikan pada gambar:** Represented by the C structure task_struct; pid t_pid; /* process identifier */
+![Producer dan consumer pada buffer bersama dari K3, halaman 41](gambar/pertemuan-03/slide-041.jpg)
 
-### Slide 013 — Process Scheduling
+Dengan rancangan satu slot sengaja dibiarkan kosong, `in == out` berarti kosong dan `(in + 1) mod N == out` berarti penuh; kapasitas efektifnya `N − 1`. **Ini sifat rancangan satu slot kosong**, bukan aturan semua buffer. Rancangan lain memakai penghitung sehingga dapat memanfaatkan semua `N` slot, tetapi penghitung dan data bersama perlu dilindungi dari pembaruan bersamaan. Tanpa sinkronisasi, consumer bisa membaca sebelum producer selesai menulis, atau producer menimpa data yang belum dibaca. Bab 7 membahas alat sinkronisasinya.
 
-![Slide 13: Process Scheduling](gambar/pertemuan-03/slide-013.jpg)
+**Contoh `N = 4`:** mula-mula `in = out = 0`. Setelah producer menaruh dua item, `in = 2` dan `out = 0`. Ia boleh menaruh satu item lagi sehingga `in = 3`. Sesudah itu slot efektif penuh karena `(3 + 1) mod 4 = 0 = out`; slot keempat sengaja tidak diisi agar keadaan penuh tidak rancu dengan kosong.
 
-Context switch menyimpan keadaan proses lama ke PCB lalu memulihkan keadaan proses baru. Selama pergantian itu CPU tidak mengerjakan instruksi pengguna, sehingga ada biaya tambahan. Jangan samakan pergantian proses dengan pembuatan proses.
+## 3.6 IPC in Message-Passing Systems
 
-**Perhatikan pada gambar:** ▪ Process scheduler selects among available processes; for next execution on CPU core
+### 3.6.1 Naming
 
-### Slide 014 — Ready and Wait Queues
+Komunikasi memerlukan hubungan antara pengirim dan penerima. Pada **direct communication**, proses menyebut tujuan secara langsung. Pada **indirect communication**, keduanya memakai *mailbox* atau port; pengirim mengirim ke wadah itu, penerima mengambil darinya. Cara kedua memudahkan pergantian pihak tanpa harus mengetahui identitas proses lain, tetapi aturan kepemilikan dan penerima pesan perlu jelas.
 
-![Slide 14: Ready and Wait Queues](gambar/pertemuan-03/slide-014.jpg)
+### 3.6.2 Synchronization
 
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
+Operasi kirim dan terima bisa **blocking** atau **nonblocking**. Kirim blocking menunggu sampai syarat pengiriman terpenuhi; terima blocking menunggu pesan tersedia. Operasi nonblocking segera kembali, mungkin dengan hasil “belum ada pesan”. Jangan menyamakan blocking dengan “selalu buruk”: menunggu dapat menyederhanakan urutan kerja. Namun dua pihak yang sama-sama menunggu satu sama lain bisa terhenti, sehingga alur komunikasi harus dirancang.
 
-### Slide 015 — Representation of Process Scheduling
+### 3.6.3 Buffering
 
-![Slide 15: Representation of Process Scheduling](gambar/pertemuan-03/slide-015.jpg)
+Pesan dapat ditampung dalam antrean berkapasitas **nol**, **terbatas**, atau **tak terbatas secara konsep**. Kapasitas nol membutuhkan pengirim dan penerima bertemu pada waktu yang sesuai (*rendezvous*). Kapasitas terbatas membuat pengirim menunggu ketika penuh. Kapasitas tak terbatas berarti pengirim tidak menunggu karena kapasitas menurut model, tetapi sistem nyata tetap dibatasi memori. Kapasitas buffer dan blocking adalah dua hal yang saling berkaitan, bukan istilah yang sama.
 
-Context switch menyimpan keadaan proses lama ke PCB lalu memulihkan keadaan proses baru. Selama pergantian itu CPU tidak mengerjakan instruksi pengguna, sehingga ada biaya tambahan. Jangan samakan pergantian proses dengan pembuatan proses.
+![Model antrean pesan dari K3, halaman 48](gambar/pertemuan-03/slide-048.jpg)
 
-### Slide 016 — CPU Switch From Process to Process
+## 3.7 Examples of IPC Systems — Bentuk nyata
 
-![Slide 16: CPU Switch From Process to Process](gambar/pertemuan-03/slide-016.jpg)
+### 3.7.1 POSIX Shared Memory
 
-Context switch menyimpan keadaan proses lama ke PCB lalu memulihkan keadaan proses baru. Selama pergantian itu CPU tidak mengerjakan instruksi pengguna, sehingga ada biaya tambahan. Jangan samakan pergantian proses dengan pembuatan proses.
+POSIX menyediakan cara membuat objek memori bersama, mengatur ukurannya, dan memetakannya ke ruang alamat proses. Setelah pemetaan, proses membaca atau menulis area yang sama melalui alamat memorinya. Pembuatan dan pemetaan memerlukan layanan kernel; akses data biasa sesudahnya tidak perlu mengirim setiap nilai sebagai pesan. Proses tetap perlu mengatur urutan akses.
 
-**Perhatikan pada gambar:** A context switch occurs when the CPU switches from; one process to another.
+### 3.7.2 Mach Message Passing
 
-### Slide 017 — Context Switch
+Mach menonjolkan pertukaran pesan melalui **port**. Proses mengirim ke port dan penerima mengambil dari port. Contoh ini menunjukkan bahwa operasi yang terlihat sederhana—kirim dan terima—tetap membutuhkan aturan identitas tujuan, hak akses, serta penanganan pesan ketika penerima belum siap.
 
-![Slide 17: Context Switch](gambar/pertemuan-03/slide-017.jpg)
+### 3.7.3 Windows IPC
 
-Context switch menyimpan keadaan proses lama ke PCB lalu memulihkan keadaan proses baru. Selama pergantian itu CPU tidak mengerjakan instruksi pengguna, sehingga ada biaya tambahan. Jangan samakan pergantian proses dengan pembuatan proses.
+Windows menggunakan mekanisme pesan dalam beberapa layanan sistemnya. Contoh pada buku menunjukkan variasi implementasi IPC; untuk UTS, pahami model kirim–terima dan kapan data disalin atau dibagikan. Nama layanan internal dapat berbeda antarversi dan bukan inti konsep.
 
-**Perhatikan pada gambar:** ▪ When CPU switches to another process, the system must; save the state of the old process and load the saved state
+### 3.7.4 Pipes
 
-### Slide 018 — Multitasking in Mobile Systems
+**Pipe** adalah saluran aliran byte. Pada *ordinary pipe*, satu ujung dipakai membaca dan ujung lain menulis; biasanya dipakai oleh proses yang memiliki hubungan, misalnya setelah `fork()`. Pipe biasa bersifat sementara. **Named pipe** mempunyai nama yang dapat dibuka proses yang tidak memiliki hubungan induk–anak. Satu pipe lazimnya satu arah; komunikasi dua arah mungkin membutuhkan dua saluran atau mekanisme lain.
 
-![Slide 18: Multitasking in Mobile Systems](gambar/pertemuan-03/slide-018.jpg)
+![Aliran pipe dari K3, halaman 60](gambar/pertemuan-03/slide-060.jpg)
 
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
+Contoh perintah `penghasil | penyaring`: keluaran penghasil masuk sebagai masukan penyaring. Pipe mengalirkan byte; batas “satu objek data” tidak otomatis dijaga seperti sebuah pesan utuh. Jika pembaca lambat dan buffer penuh, penulis dapat menunggu.
 
-**Perhatikan pada gambar:** ▪ Some mobile systems (e.g., early version of iOS) allow only one; process to run, others suspended
+## 3.8 Communication in Client–Server Systems
 
-### Slide 019 — Operations on Processes
+### 3.8.1 Sockets
 
-![Slide 19: Operations on Processes](gambar/pertemuan-03/slide-019.jpg)
+**Socket** adalah titik ujung komunikasi. Dalam jaringan, pasangan alamat dan port membantu menemukan layanan; protokol menentukan cara data dikirim. Client menghubungi server, lalu keduanya membaca dan menulis lewat socket. TCP menyajikan aliran byte yang berurutan dan andal menurut model protokolnya, sedangkan UDP mengirim datagram tanpa jaminan pengantaran atau urutan. Pilihan protokol memengaruhi cara aplikasi menangani pesan yang hilang dan batas pesan.
 
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
+![Client dan server lewat socket dari K3, halaman 65](gambar/pertemuan-03/slide-065.jpg)
 
-**Perhatikan pada gambar:** ▪ System must provide mechanisms for:
+### 3.8.2 Remote Procedure Calls (RPC)
 
-### Slide 020 — Process Creation
+RPC membuat pemanggilan layanan di mesin lain tampak seperti pemanggilan fungsi: client menyiapkan argumen, *stub* mengubahnya menjadi pesan, jaringan mengirim pesan, server menjalankan layanan, lalu hasil dikirim kembali. Tampilan yang mirip fungsi lokal tidak menghapus kemungkinan jaringan lambat, pesan hilang, atau server gagal. Karena itu, hasil yang tidak diterima belum tentu berarti operasi tidak dijalankan.
 
-![Slide 20: Process Creation](gambar/pertemuan-03/slide-020.jpg)
+![Urutan RPC dari K3, halaman 70](gambar/pertemuan-03/slide-070.jpg)
 
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
+Jika client mengulang permintaan setelah waktu tunggu habis, operasi seperti “tambah saldo” bisa terjadi dua kali bila server sebenarnya sudah menjalankan permintaan pertama. Sistem perlu identitas permintaan atau operasi yang aman diulang untuk mengendalikan risiko ini. **Android RPC** dalam buku adalah salah satu contoh komunikasi antarkomponen; konsep utamanya tetap pengemasan argumen, pengiriman, pelaksanaan, dan pengembalian hasil.
 
-**Perhatikan pada gambar:** ▪ Parent process create children processes, which, in turn; create other processes, forming a tree of processes
+## 3.9 Summary — Rangkaian inti
 
-### Slide 021 — Process Creation (Cont.)
+Program aktif mempunyai keadaan dan PCB. Saat menunggu I/O, proses meninggalkan CPU; saat siap, ia bersaing lewat ready queue. Kernel menyimpan konteks sebelum memindahkan CPU. Proses dapat membuat anak, mengganti program anak, serta menunggu hasilnya. Proses yang bekerja sama dapat berbagi memori atau mengirim pesan; keduanya membutuhkan aturan urutan dan penanganan kegagalan.
 
-![Slide 21: Process Creation (Cont.)](gambar/pertemuan-03/slide-021.jpg)
-
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
-
-**Perhatikan pada gambar:** • Child duplicate of parent; • Child has a program loaded into it
-
-### Slide 022 — A Tree of Processes in Linux
-
-![Slide 22: A Tree of Processes in Linux](gambar/pertemuan-03/slide-022.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-### Slide 023 — C Program Forking Separate Process
-
-![Slide 23: C Program Forking Separate Process](gambar/pertemuan-03/slide-023.jpg)
-
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
-
-### Slide 024 — Creating a Separate Process via Windows API
-
-![Slide 24: Creating a Separate Process via Windows API](gambar/pertemuan-03/slide-024.jpg)
-
-Aplikasi meminta kerja kernel lewat system call. CPU berpindah ke kernel mode untuk menjalankan layanan yang butuh hak istimewa, lalu kembali ke user mode; API adalah antarmuka pemrograman yang sering membungkus panggilan itu. Parameter dapat lewat register, blok memori, atau stack.
-
-### Slide 025 — Process Termination
-
-![Slide 25: Process Termination](gambar/pertemuan-03/slide-025.jpg)
-
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
-
-**Perhatikan pada gambar:** ▪ Process executes last statement and then asks the operating; system to delete it using the exit() system call.
-
-### Slide 026 — Process Termination
-
-![Slide 26: Process Termination](gambar/pertemuan-03/slide-026.jpg)
-
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
-
-**Perhatikan pada gambar:** ▪ Some operating systems do not allow child to exists if its parent; has terminated. If a process terminates, then all its children
-
-### Slide 027 — Android Process Importance Hierarchy
-
-![Slide 27: Android Process Importance Hierarchy](gambar/pertemuan-03/slide-027.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Mobile operating systems often have to terminate processes to reclaim; system resources such as memory. From most to least important:
-
-### Slide 028 — Multiprocess Architecture – Chrome Browser
-
-![Slide 28: Multiprocess Architecture – Chrome Browser](gambar/pertemuan-03/slide-028.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Many web browsers ran as single process (some still do); • If one web site causes trouble, entire browser can hang or crash
-
-### Slide 029 — Interprocess Communication
-
-![Slide 29: Interprocess Communication](gambar/pertemuan-03/slide-029.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Processes within a system may be independent or cooperating; ▪ Cooperating process can affect or be affected by other processes,
-
-### Slide 030 — Communications Models
-
-![Slide 30: Communications Models](gambar/pertemuan-03/slide-030.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** (a) Shared memory. (b) Message passing.
-
-### Slide 031 — Producer-Consumer Problem
-
-![Slide 31: Producer-Consumer Problem](gambar/pertemuan-03/slide-031.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Paradigm for cooperating processes:; • producer process produces information that is consumed
-
-### Slide 032 — IPC – Shared Memory
-
-![Slide 32: IPC – Shared Memory](gambar/pertemuan-03/slide-032.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ An area of memory shared among the processes that wish to; ▪ The communication is under the control of the users processes
-
-### Slide 033 — Bounded-Buffer – Shared-Memory Solution
-
-![Slide 33: Bounded-Buffer – Shared-Memory Solution](gambar/pertemuan-03/slide-033.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** item buffer[BUFFER_SIZE];; ▪ Solution is correct, but can only use BUFFER_SIZE-1 elements
-
-### Slide 034 — Producer Process – Shared Memory
-
-![Slide 34: Producer Process – Shared Memory](gambar/pertemuan-03/slide-034.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** /* produce an item in next produced */; while (((in + 1) % BUFFER_SIZE) == out)
-
-### Slide 035 — Consumer Process – Shared Memory
-
-![Slide 35: Consumer Process – Shared Memory](gambar/pertemuan-03/slide-035.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** next_consumed = buffer[out];; out = (out + 1) % BUFFER_SIZE;
-
-### Slide 036 — What about Filling all the Buffers?
-
-![Slide 36: What about Filling all the Buffers?](gambar/pertemuan-03/slide-036.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Suppose that we wanted to provide a solution to the consumer-; producer problem that fills all the buffers.
-
-### Slide 037 — Producer
-
-![Slide 37: Producer](gambar/pertemuan-03/slide-037.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** /* produce an item in next produced */; while (counter == BUFFER_SIZE)
-
-### Slide 038 — Consumer
-
-![Slide 38: Consumer](gambar/pertemuan-03/slide-038.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** next_consumed = buffer[out];; out = (out + 1) % BUFFER_SIZE;
-
-### Slide 039 — Race Condition
-
-![Slide 39: Race Condition](gambar/pertemuan-03/slide-039.jpg)
-
-Race condition terjadi ketika hasil bergantung pada urutan operasi yang saling beririsan. Bila dua pekerja mengubah data bersama, lindungi bagian kritis atau gunakan operasi atomik; hasil yang tampak benar sekali belum membuktikan kode aman.
-
-**Perhatikan pada gambar:** ▪ counter++ could be implemented as; register1 = register1 + 1
-
-### Slide 040 — Race Condition (Cont.)
-
-![Slide 40: Race Condition (Cont.)](gambar/pertemuan-03/slide-040.jpg)
-
-Race condition terjadi ketika hasil bergantung pada urutan operasi yang saling beririsan. Bila dua pekerja mengubah data bersama, lindungi bagian kritis atau gunakan operasi atomik; hasil yang tampak benar sekali belum membuktikan kode aman.
-
-**Perhatikan pada gambar:** ▪ Question – why was there no race condition; in the first solution (where at most N – 1)
-
-### Slide 041 — IPC – Message Passing
-
-![Slide 41: IPC – Message Passing](gambar/pertemuan-03/slide-041.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Processes communicate with each other without; resorting to shared variables
-
-### Slide 042 — Message Passing (Cont.)
-
-![Slide 42: Message Passing (Cont.)](gambar/pertemuan-03/slide-042.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ If processes P and Q wish to communicate, they need to:; • Establish a communication link between them
-
-### Slide 043 — Implementation of Communication Link
-
-![Slide 43: Implementation of Communication Link](gambar/pertemuan-03/slide-043.jpg)
-
-Mekanisme adalah cara sistem melakukan sesuatu; kebijakan menentukan pilihan mana yang diambil. Contohnya, mekanisme timer memberi kesempatan menjadwalkan ulang, sedangkan kebijakan penjadwal memilih proses berikutnya.
-
-**Perhatikan pada gambar:** • Synchronous or asynchronous; • Automatic or explicit buffering
-
-### Slide 044 — Direct Communication
-
-![Slide 44: Direct Communication](gambar/pertemuan-03/slide-044.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Processes must name each other explicitly:; • send (P, message) – send a message to process P
-
-### Slide 045 — Indirect Communication
-
-![Slide 45: Indirect Communication](gambar/pertemuan-03/slide-045.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Messages are directed and received from mailboxes (also referred; • Each mailbox has a unique id
-
-### Slide 046 — Indirect Communication (Cont.)
-
-![Slide 46: Indirect Communication (Cont.)](gambar/pertemuan-03/slide-046.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** • Create a new mailbox (port); • Send and receive messages through mailbox
-
-### Slide 047 — Indirect Communication (Cont.)
-
-![Slide 47: Indirect Communication (Cont.)](gambar/pertemuan-03/slide-047.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** • P1, P2, and P3 share mailbox A; • P1, sends; P2 and P3 receive
-
-### Slide 048 — Synchronization
-
-![Slide 48: Synchronization](gambar/pertemuan-03/slide-048.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** Message passing may be either blocking or non-blocking; ▪ Blocking is considered synchronous
-
-### Slide 049 — Producer-Consumer: Message Passing
-
-![Slide 49: Producer-Consumer: Message Passing](gambar/pertemuan-03/slide-049.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** /* produce an item in next_produced */; /* consume the item in next_consumed */
-
-### Slide 050 — Buffering
-
-![Slide 50: Buffering](gambar/pertemuan-03/slide-050.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Queue of messages attached to the link.; ▪ Implemented in one of three ways
-
-### Slide 051 — Examples of IPC Systems - POSIX
-
-![Slide 51: Examples of IPC Systems - POSIX](gambar/pertemuan-03/slide-051.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** • Process first creates shared memory segment; shm_fd = shm_open(name, O CREAT | O RDWR, 0666);
-
-### Slide 052 — IPC POSIX Producer
-
-![Slide 52: IPC POSIX Producer](gambar/pertemuan-03/slide-052.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-### Slide 053 — IPC POSIX Consumer
-
-![Slide 53: IPC POSIX Consumer](gambar/pertemuan-03/slide-053.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-### Slide 054 — Examples of IPC Systems - Mach
-
-![Slide 54: Examples of IPC Systems - Mach](gambar/pertemuan-03/slide-054.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Mach communication is message based; • Even system calls are messages
-
-### Slide 055 — Mach Messages
-
-![Slide 55: Mach Messages](gambar/pertemuan-03/slide-055.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** mach_msg_header_t header;
-
-### Slide 056 — Mach Message Passing - Client
-
-![Slide 56: Mach Message Passing - Client](gambar/pertemuan-03/slide-056.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-### Slide 057 — Mach Message Passing - Server
-
-![Slide 57: Mach Message Passing - Server](gambar/pertemuan-03/slide-057.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-### Slide 058 — Examples of IPC Systems – Windows
-
-![Slide 58: Examples of IPC Systems – Windows](gambar/pertemuan-03/slide-058.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Message-passing centric via advanced local procedure call; • Only works between processes on the same system
-
-### Slide 059 — Local Procedure Calls in Windows
-
-![Slide 59: Local Procedure Calls in Windows](gambar/pertemuan-03/slide-059.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-### Slide 060 — Pipes
-
-![Slide 60: Pipes](gambar/pertemuan-03/slide-060.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Acts as a conduit allowing two processes to communicate; • Is communication unidirectional or bidirectional?
-
-### Slide 061 — Ordinary Pipes
-
-![Slide 61: Ordinary Pipes](gambar/pertemuan-03/slide-061.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Ordinary Pipes allow communication in standard producer-consumer; ▪ Producer writes to one end (the write-end of the pipe)
-
-### Slide 062 — Named Pipes
-
-![Slide 62: Named Pipes](gambar/pertemuan-03/slide-062.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Named Pipes are more powerful than ordinary pipes; ▪ Communication is bidirectional
-
-### Slide 063 — Communications in Client-Server Systems
-
-![Slide 63: Communications in Client-Server Systems](gambar/pertemuan-03/slide-063.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Remote Procedure Calls
-
-### Slide 064 — Sockets
-
-![Slide 64: Sockets](gambar/pertemuan-03/slide-064.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ A socket is defined as an endpoint for communication; ▪ Concatenation of IP address and port – a number included at start of
-
-### Slide 065 — Socket Communication
-
-![Slide 65: Socket Communication](gambar/pertemuan-03/slide-065.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-### Slide 066 — Sockets in Java
-
-![Slide 66: Sockets in Java](gambar/pertemuan-03/slide-066.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Three types of sockets; class– data can be sent
-
-### Slide 067 — Sockets in Java
-
-![Slide 67: Sockets in Java](gambar/pertemuan-03/slide-067.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** The equivalent Date client
-
-### Slide 068 — Remote Procedure Calls
-
-![Slide 68: Remote Procedure Calls](gambar/pertemuan-03/slide-068.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Remote procedure call (RPC) abstracts procedure calls between; processes on networked systems
-
-### Slide 069 — Remote Procedure Calls (Cont.)
-
-![Slide 69: Remote Procedure Calls (Cont.)](gambar/pertemuan-03/slide-069.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Data representation handled via External Data Representation; (XDL) format to account for different architectures
-
-### Slide 070 — Execution of RPC
-
-![Slide 70: Execution of RPC](gambar/pertemuan-03/slide-070.jpg)
-
-fork() membuat proses anak dengan alur eksekusi terpisah. exec() mengganti citra program pada proses yang memanggilnya. wait() membuat induk menunggu dan mengambil status anak; tanpa pengambilan status, anak yang selesai dapat menjadi zombie. Anak yang induknya lebih dulu selesai menjadi orphan.
-
-### Slide 071 — End of Chapter 3
-
-![Slide 71: End of Chapter 3](gambar/pertemuan-03/slide-071.jpg)
-
-Slide ini memetakan posisi topik dalam bab. Pakai judul-judulnya sebagai daftar cek; utamakan hubungan sebab-akibat dan contoh, bukan hafalan urutan.
-
-### Slide 072 — Producer-Consumer Problem
-
-![Slide 72: Producer-Consumer Problem](gambar/pertemuan-03/slide-072.jpg)
-
-IPC memungkinkan proses bertukar data. Shared memory memakai area yang sama dan perlu sinkronisasi; message passing mengirim pesan melalui fasilitas sistem. Pipe lazim untuk aliran searah, socket untuk komunikasi antartitik, dan RPC membuat pemanggilan jauh tampak seperti fungsi lokal.
-
-**Perhatikan pada gambar:** ▪ Paradigm for cooperating processes:; • producer process produces information that is consumed
-
-### Slide 073 — Cooperating Processes
-
-![Slide 73: Cooperating Processes](gambar/pertemuan-03/slide-073.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Independent process cannot affect or be affected by the execution; ▪ Cooperating process can affect or be affected by the execution of
-
-### Slide 074 — Synchronization
-
-![Slide 74: Synchronization](gambar/pertemuan-03/slide-074.jpg)
-
-Slide ini memberi contoh tambahan untuk bagian tersebut. Perhatikan urutan pada gambar: identifikasi pelaku, sumber daya yang dipakai, lalu perubahan keadaan setelah setiap langkah. Hubungkan dengan slide sebelumnya sebelum menghafal istilahnya.
-
-**Perhatikan pada gambar:** ▪ Message passing may be either blocking or non-blocking; • Blocking is considered synchronous
+| Jika soal menyebut… | Periksa konsep ini |
+|---|---|
+| “Siap tetapi belum berjalan” | Ready, bukan waiting. |
+| “Menunggu disk” | Waiting; setelah selesai kembali ke ready. |
+| “Melanjutkan instruksi terakhir” | Program counter dan register dalam PCB. |
+| “Membuat anak lalu menjalankan program lain” | `fork()` lalu `exec()`. |
+| “Anak selesai, induk belum mengambil hasil” | Zombie. |
+| “Data bersama dibaca terlalu cepat” | Sinkronisasi shared memory. |
+| “Client memanggil layanan jauh” | RPC dan kemungkinan kegagalan jaringan. |
 
 ## Contoh soal dan pembahasan
 
-### Contoh 1 — Keluaran `fork()` (latihan dari kisi-kisi)
-```c
-fork();
-fork();
-printf("X");
-```
-**Pembahasan.** Dengan dua `fork()` yang berhasil, jumlah proses menjadi 2² = 4, sehingga `X` dicetak empat kali. Urutan cetak antarproses tidak dijamin. Setiap `fork()` menggandakan jumlah alur yang telah ada.
+### Soal 1 — State dan queue (adaptasi UTS Sistem Operasi 2022)
 
-### Contoh 2 — State setelah I/O (latihan dari kisi-kisi)
-**Soal.** Proses berjalan meminta baca disk. Setelah data siap, state apa yang dilalui?
+**Soal.** A sedang berjalan lalu meminta baca disk. B siap berjalan. Ketika disk selesai, apakah A langsung berjalan? Gambarkan jalur A dan hubungkan state dengan antreannya.
 
-**Pembahasan.** Running → waiting saat meminta I/O; waiting → ready saat I/O selesai. Proses baru menjadi running ketika dipilih penjadwal.
+**Pembahasan.** A berpindah `running → waiting` dan masuk antrean tunggu disk. Penjadwal dapat memilih B dari ready queue. Ketika disk selesai, A pindah `waiting → ready` dan masuk ready queue. A baru `ready → running` jika dipilih. Jika B masih berjalan, A tidak otomatis merebut CPU. Dengan begitu, state menunjukkan *kesiapan*, sedangkan queue menyimpan proses yang menunggu sumber daya atau giliran.
 
-### Contoh 3 — Shell (adaptasi UTS 2018/2022)
-**Pembahasan.** Urutannya `fork()` → `exec()` di anak, `wait()` di induk. `fork()` membuat proses; `exec()` mengganti program; `wait()` mengambil status anak selesai.
+### Soal 2 — Shell membuat proses (adaptasi UTS Sistem Operasi 2022)
 
-## Rujukan
+**Soal.** Sebutkan peran `fork()`, `exec()`, dan `wait()` ketika shell menjalankan program.
 
-- Slide kuliah `K3.pdf` halaman 1–74 dari paket Sensei.
+**Pembahasan.** Shell memanggil `fork()` untuk membuat anak. Anak memanggil `exec()` agar program yang diminta menggantikan citra program anak. Induk boleh memanggil `wait()` untuk menunggu akhir anak dan mengambil statusnya. `exec()` tidak menciptakan anak baru; proses anak tetap punya identitas proses yang sama setelah citranya diganti.
 
-- *Operating System Concepts*, edisi ke-10, Silberschatz, Galvin, dan Gagne, sebagaimana tercantum pada slide.
+### Soal 3 — Program, proses, dan PCB (adaptasi latihan K3 nomor 61–63)
 
-- `Kisi kisi.pdf` dan kumpulan contoh UTS 2018, 2019, 2021, 2022 dalam paket Sensei. Soal yang diberi label "adaptasi" mengikuti jenis/topik soal terdahulu; angka dan redaksinya tidak diklaim sama dengan soal asli.
+**Soal.** Satu program editor dibuka dua kali. Apa yang sama dan apa yang berbeda? Mengapa PCB diperlukan?
+
+**Pembahasan.** Kedua proses berasal dari program yang sama, tetapi masing-masing punya identitas, data kerja, dan posisi eksekusi. Kernel membutuhkan PCB untuk menyimpan state, program counter, register, serta informasi lain agar setiap proses dapat dijadwalkan dan dilanjutkan dengan benar. Berkas program di disk saja tidak menyimpan keadaan dua jendela yang sedang berjalan.
+
+### Soal 4 — Ready atau waiting? (adaptasi latihan K3 nomor 64–68)
+
+**Soal.** Proses P menunggu jawaban disk; Q siap tetapi CPU dipakai R. Tentukan state P dan Q, lalu state P setelah disk selesai.
+
+**Pembahasan.** P = waiting karena ada kejadian yang belum selesai. Q = ready karena tidak terhalang selain giliran CPU. Sesudah disk selesai, P = ready. P belum tentu running karena R mungkin masih memakai CPU atau Q dipilih lebih dulu.
+
+### Soal 5 — Zombie dan orphan (latihan berdasarkan subbab 3.3)
+
+**Soal.** Anak sudah `exit()`, tetapi induk belum `wait()`. Pada kasus lain, induk berakhir lebih dahulu sementara anak masih bekerja. Sebutkan keduanya.
+
+**Pembahasan.** Kasus pertama adalah zombie: anak selesai, status akhirnya masih perlu diambil. Kasus kedua adalah orphan: anak masih hidup tanpa induk asal. Menyebut keduanya “proses mati” menghilangkan perbedaan penting.
+
+### Soal 6 — Buffer melingkar (latihan berdasarkan subbab 3.5)
+
+**Soal.** Buffer memakai empat slot dan aturan satu slot kosong. Jika `in = 2` dan `out = 3`, apakah buffer penuh? Berapa item di dalamnya?
+
+**Pembahasan.** Posisi sesudah `in` adalah `(2 + 1) mod 4 = 3`, sama dengan `out`, jadi buffer penuh menurut aturan ini. Jumlah item efektifnya `N − 1 = 3`. Jawaban “empat item” salah karena satu slot sengaja dikosongkan sebagai penanda.
+
+### Soal 7 — Memilih cara komunikasi (latihan berdasarkan kisi-kisi IPC)
+
+**Soal.** Dua proses di satu komputer bertukar blok data besar berulang kali. Pilih shared memory atau message passing, dan sebutkan masalah yang masih harus diselesaikan.
+
+**Pembahasan.** Shared memory masuk akal karena setelah pemetaan, data dapat diakses tanpa mengirim ulang tiap blok sebagai pesan. Namun kedua proses tetap harus menyepakati kapan data selesai ditulis dan aman dibaca; diperlukan sinkronisasi. Message passing juga mungkin, terutama bila kemudahan pengaturan lebih penting daripada biaya penyalinan. Pilihan bukan aturan mutlak.
+
+## Uji pemahaman
+
+1. Mengapa proses yang menunggu I/O tidak disebut ready?
+2. Apa yang perlu disimpan agar proses melanjutkan instruksi yang tepat setelah context switch?
+3. Mengapa `exec()` sendiri tidak menambah jumlah proses?
+4. Apa risiko mengulang RPC setelah waktu tunggu habis?
+5. Kapan ordinary pipe kurang sesuai dibanding named pipe atau socket?
+
+**Jawaban ringkas:** (1) kejadian yang dibutuhkan belum selesai; (2) setidaknya program counter dan register, disimpan melalui konteks proses/PCB; (3) ia mengganti citra program proses pemanggil; (4) operasi bisa terulang padahal permintaan pertama telah dijalankan; (5) ketika proses tidak memiliki hubungan yang memudahkan pewarisan pipe atau perlu komunikasi jaringan.
+
+## Sumber dan batas cakupan
+
+- Silberschatz, Galvin, dan Gagne, *Operating System Concepts*, edisi ke-10, Bab 3 subbab 3.1–3.9.
+- `K3.pdf`, terutama diagram keadaan, PCB, antrean, pembuatan proses, IPC, pipe, socket, dan RPC.
+- `Contoh Soal/UTS Sistem Operasi 2022.pdf` untuk soal adaptasi 1–2; `Contoh Soal/Latihan Soal K3 - Proses.pdf` untuk soal adaptasi 3–4. Soal lain adalah latihan yang disusun dari konsep bab dan kisi-kisi, bukan salinan UTS.
+- Penjadwalan rinci dan sinkronisasi formal sengaja dirujuk ke bab kuliah berikutnya. Tidak ada kontrak kuliah terpisah dalam paket bahan yang diperiksa.
